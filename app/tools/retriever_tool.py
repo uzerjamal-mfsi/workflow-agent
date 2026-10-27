@@ -1,7 +1,5 @@
-from typing import Type
-
 from langchain_core.tools import BaseTool
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 
 from app.config.env_config import settings
 from app.services.core_services.retrieval_service import vector_retriever
@@ -20,7 +18,7 @@ class RetrieverTool(BaseTool):
 
     name: str = "retrieve_documents"
     description: str = "Retrieves documents from the vector database"
-    args_schema: Type[BaseModel] = RetrieverToolInput
+    args_schema: type[BaseModel] = RetrieverToolInput
     collection_name: str = Field(default=settings.COLLECTION_NAME, exclude=True)
     return_direct: bool = False
 

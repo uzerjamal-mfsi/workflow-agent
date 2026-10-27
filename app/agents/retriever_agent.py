@@ -1,7 +1,5 @@
-from typing import Type
-
-from langchain.tools import BaseTool
-from pydantic.v1 import BaseModel, Field
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
 
 from app.agents.base_agent import BaseAgent
 from app.config.env_config import settings
@@ -51,7 +49,7 @@ class RetrieverAgentTool(BaseTool):
 
     name: str = "retriever_agent_tool"
     description: str = "Retrieves an answer for a user question"
-    args_schema: Type[BaseModel] = RetrieverAgentToolInput
+    args_schema: type[BaseModel] = RetrieverAgentToolInput
     thread_id: str = Field(exclude=True)
 
     def _run(self, query: str):

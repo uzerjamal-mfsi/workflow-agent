@@ -1,5 +1,3 @@
-from typing import Optional
-
 from app.agents.base_agent import BaseAgent
 from app.agents.retriever_agent import RetrieverAgentTool
 from app.config.log_config import logger
@@ -19,7 +17,7 @@ class SupervisorAgent(BaseAgent):
             llm=get_default_chat_client(), tools=tools, system_prompt=SUPERVISOR_PROMPT
         )
 
-    def invoke(self, thread_id: str, query: Optional[str] = None) -> str:
+    def invoke(self, thread_id: str, query: str | None = None) -> str:
         """Handle a user query with tool execution.
 
         Args:

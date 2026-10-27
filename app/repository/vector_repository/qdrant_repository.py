@@ -1,5 +1,3 @@
-from typing import Optional
-
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient, models
 
@@ -13,7 +11,7 @@ from app.utils.core_utils import embeddings_client
 class QdrantRepository:
     """Repository for Qdrant vector database operations."""
 
-    def __init__(self, client: Optional[QdrantClient] = None):
+    def __init__(self, client: QdrantClient | None = None):
         """Initialize the Qdrant repository.
 
         Args:
@@ -52,9 +50,7 @@ class QdrantRepository:
         model = VECTOR_DB.EMBEDDING_MODEL.value
         return f"{base}_{self._normalize_model_name(model)}"
 
-    def build_vectordb(
-        self, collection_name: Optional[str] = None
-    ) -> QdrantVectorStore:
+    def build_vectordb(self, collection_name: str | None = None) -> QdrantVectorStore:
         """Create and return a Qdrant-backed vector store.
 
         Args:
@@ -89,7 +85,7 @@ class QdrantRepository:
         except Exception as exc:
             logger.error("Error initializing qdrant vectordb: %s", exc)
             raise ValueError(
-                "Please make sure qdrant db is running on port 6333: " f"{str(exc)}"
+                "Please make sure qdrant db is running on port 6333: " f"{exc!s}"
             ) from exc
 
         return vectordb
@@ -109,7 +105,7 @@ class QdrantRepository:
             return True
         except Exception as exc:
             logger.error("Error deleting collection %s: %s", collection_name, exc)
-            raise ValueError(f"Error deleting collection: {str(exc)}") from exc
+            raise ValueError(f"Error deleting collection: {exc!s}") from exc
 
     def collection_exists(self, collection_name: str) -> bool:
         """Check if a collection exists in Qdrant.

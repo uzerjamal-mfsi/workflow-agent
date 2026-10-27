@@ -15,8 +15,6 @@ class InMemoryHistory:
 
         Args:
             session_id: Conversation session identifier.
-            ttl: Unused; accepted for API parity with Redis history provider.
-            key_prefix: Unused; accepted for API parity with Redis provider.
         """
         if session_id not in self._store:
             self._store[session_id] = InMemoryChatMessageHistory()

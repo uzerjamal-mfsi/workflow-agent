@@ -1,1 +1,1 @@
-"""Core (product) services: ingestion, retrieval, etc."""
+"""Core (product) services: retrieval."""

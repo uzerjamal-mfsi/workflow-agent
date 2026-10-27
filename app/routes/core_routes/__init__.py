@@ -1,1 +1,1 @@
-"""Core (product) API routes: chat, ingestion, etc."""
+"""Core (product) API routes: chat."""

@@ -1,5 +1,3 @@
-from typing import List, Optional
-
 from langchain_qdrant import QdrantVectorStore
 
 from app.config.log_config import logger
@@ -13,7 +11,7 @@ class Indexer:
         """Initialize indexer with Qdrant repository and collection name."""
         self.qdrant_repo = qdrant_repository
         self.collection_name = self.qdrant_repo.get_collection_name_with_model()
-        self.vectordb: Optional[QdrantVectorStore] = None
+        self.vectordb: QdrantVectorStore | None = None
 
     def initialize_vectordb(self) -> QdrantVectorStore:
         """Initialize Qdrant collection and return vector store.
@@ -26,7 +24,7 @@ class Indexer:
         )
         return self.vectordb
 
-    def index_documents(self, chunks: List):
+    def index_documents(self, chunks: list):
         """Add chunks to Qdrant (initialize if needed).
 
         Args:
@@ -53,9 +51,7 @@ class Indexer:
             return {"success": True, "collection_name": self.collection_name}
         except Exception as e:
             logger.error("Error adding documents to qdrant vectordb: %s", e)
-            raise ValueError(
-                f"Error adding documents to qdrant vectordb: {str(e)}"
-            ) from e
+            raise ValueError(f"Error adding documents to qdrant vectordb: {e!s}") from e
 
     def delete_database(self):
         """Delete the vector database.
@@ -78,4 +74,4 @@ class Indexer:
             return {"success": True, "collection_name": self.collection_name}
         except Exception as e:
             logger.error("Error deleting vector database: %s", e)
-            raise ValueError(f"Error deleting vector database: {str(e)}") from e
+            raise ValueError(f"Error deleting vector database: {e!s}") from e

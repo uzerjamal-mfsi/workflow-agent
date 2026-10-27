@@ -1,4 +1,4 @@
-"""Application constants: env names, file types, model config, route paths."""
+"""Application constants: env names, model config, route paths."""
 
 from enum import Enum
 
@@ -11,25 +11,10 @@ class Environment(Enum):
     PROD = "prod"
 
 
-class ALLOWED_FILES(Enum):
-    """Supported file extensions for ingestion."""
+class OPENROUTER_CHAT_MODEL(Enum):
+    """OpenRouter chat model configuration."""
 
-    PDF = ".pdf"
-    DOCX = ".docx"
-    ALL_FILES = (".pdf", ".docx")
-
-
-class OPENAI_CHAT_MODEL(Enum):
-    """Chat model configuration."""
-
-    MODEL_NAME = "gpt-4o-mini"
-    TEMPERATURE = 0.0
-
-
-class GEMINI_CHAT_MODEL(Enum):
-    """Gemini chat model configuration."""
-
-    MODEL_NAME = "gemini-2.5-flash-lite"
+    MODEL_NAME = "openrouter/auto"
     TEMPERATURE = 0.0
 
 
@@ -50,5 +35,3 @@ class ROUTE_CONSTANTS(Enum):
     """API route/path constants shared across the app."""
 
     API_V1_PREFIX = "/api/v1"
-    USER_COMPONENT_URI = "/api/v1/users"
-    ROLE_COMPONENT_URI = "/api/v1/roles"

@@ -1,6 +1,6 @@
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
-from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_core.tools import BaseTool
@@ -15,7 +15,7 @@ class BaseAgent:
     def __init__(
         self,
         llm=None,
-        tools: Optional[Sequence[BaseTool]] = None,
+        tools: Sequence[BaseTool] | None = None,
         system_prompt: str = "",
     ):
         """Initialize the base agent.
@@ -73,7 +73,7 @@ class BaseAgent:
         )
 
     def get_agent_with_memory(self):
-        """Create the agent runnable with Redis-backed memory.
+        """Create the agent runnable with in-memory conversation history.
 
         Returns:
             RunnableWithMessageHistory wrapping the agent executor.

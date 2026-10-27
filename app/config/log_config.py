@@ -2,7 +2,7 @@ import glob
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from logging.handlers import BaseRotatingHandler
 
 from app.config.env_config import settings
@@ -24,9 +24,7 @@ class JsonFormatter(logging.Formatter):
             JSON-encoded string representation of the log entry.
         """
         log_entry = {
-            "timestamp": datetime.fromtimestamp(
-                record.created, tz=timezone.utc
-            ).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -61,7 +59,7 @@ class DailyFileHandler(BaseRotatingHandler):
 
     @staticmethod
     def _today() -> str:
-        return datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
+        return datetime.now(tz=UTC).strftime("%Y-%m-%d")
 
     def shouldRollover(self, record: logging.LogRecord) -> bool:  # type: ignore[override]
         return self._today() != self._current_date
@@ -99,8 +97,8 @@ logging.basicConfig(level=LOG_LEVEL, handlers=handlers)
 logger = logging.getLogger("app")
 
 # Suppress verbose third-party logs
-logging.getLogger("openai").setLevel(logging.WARNING)
-logging.getLogger("openai._base_client").setLevel(logging.WARNING)
+logging.getLogger("openrouter").setLevel(logging.WARNING)
+logging.getLogger("langchain_openrouter").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("langchain.agents.agent_iterator").setLevel(logging.WARNING)

@@ -1,5 +1,3 @@
-from typing import Optional
-
 from langchain_qdrant import QdrantVectorStore
 
 from app.config.log_config import logger
@@ -11,7 +9,7 @@ from app.repository.vector_repository.qdrant_repository import qdrant_repository
 class VectorRetriever:
     """Qdrant-backed retriever for existing collections."""
 
-    def __init__(self, collection_name: Optional[str] = None) -> None:
+    def __init__(self, collection_name: str | None = None) -> None:
         """Initialize retriever with collection name.
 
         Args:
@@ -21,7 +19,7 @@ class VectorRetriever:
         self.collection_name = (
             collection_name or self.qdrant_repo.get_collection_name_with_model()
         )
-        self.vectordb: Optional[QdrantVectorStore] = None
+        self.vectordb: QdrantVectorStore | None = None
         self.top_k = VECTOR_DB.TOP_K.value
 
     def initialize_vectordb(self) -> QdrantVectorStore:
