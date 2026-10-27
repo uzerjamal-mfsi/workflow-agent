@@ -1,0 +1,53 @@
+{
+  "templates": [
+    {
+      "template_id": "NOTIFY-TASK-ASSIGNED",
+      "name": "Task assignment notification",
+      "event": "task_assigned",
+      "subject": "[{{project}}] Task assigned: {{task_id}} — {{title}}",
+      "body": "Hi {{recipient_name}},\n\nA task has been assigned to {{assignee_name}}.\n\nTask: {{task_id}} — {{title}}\nPriority: {{priority}}\nDue date: {{due_date}}\n\nPlease review the task in the project tracker.\n\nRegards,\nNorthstar Platform Team",
+      "required_variables": [
+        "project",
+        "task_id",
+        "title",
+        "recipient_name",
+        "assignee_name",
+        "priority",
+        "due_date"
+      ],
+      "approval_required": true
+    },
+    {
+      "template_id": "NOTIFY-TASK-UPDATED",
+      "name": "Task status update",
+      "event": "task_updated",
+      "subject": "[{{project}}] Task updated: {{task_id}}",
+      "body": "Hi {{recipient_name}},\n\nThe following task has been updated.\n\nTask: {{task_id}} — {{title}}\nChanges: {{change_summary}}\nCurrent status: {{status}}\n\nRegards,\nNorthstar Platform Team",
+      "required_variables": [
+        "project",
+        "task_id",
+        "title",
+        "recipient_name",
+        "change_summary",
+        "status"
+      ],
+      "approval_required": true
+    },
+    {
+      "template_id": "NOTIFY-BULK-UPDATE-SUMMARY",
+      "name": "Bulk update summary",
+      "event": "bulk_update_completed",
+      "subject": "[{{project}}] Bulk update completed: {{updated_count}} tasks",
+      "body": "Hi {{recipient_name}},\n\nThe approved bulk update has finished.\n\nUpdated tasks: {{updated_count}}\nSkipped tasks: {{skipped_count}}\nFailed tasks: {{failed_count}}\nWorkflow: {{workflow_id}}\n\nRegards,\nNorthstar Platform Team",
+      "required_variables": [
+        "project",
+        "recipient_name",
+        "updated_count",
+        "skipped_count",
+        "failed_count",
+        "workflow_id"
+      ],
+      "approval_required": true
+    }
+  ]
+}

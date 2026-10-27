@@ -1,0 +1,90 @@
+{
+  "organization": "Northstar Software",
+  "timezone": "Asia/Kolkata",
+  "users": [
+    {
+      "user_id": "dev01",
+      "name": "Alex Morgan",
+      "email": "alex.morgan@example.com",
+      "role": "Backend Developer",
+      "team": "Platform",
+      "active": true,
+      "permissions": [
+        "task:create",
+        "task:update",
+        "task:read",
+        "calendar:read"
+      ]
+    },
+    {
+      "user_id": "dev02",
+      "name": "Priya Shah",
+      "email": "priya.shah@example.com",
+      "role": "Backend Developer",
+      "team": "Platform",
+      "active": true,
+      "permissions": [
+        "task:create",
+        "task:update",
+        "task:read",
+        "calendar:read"
+      ]
+    },
+    {
+      "user_id": "dev03",
+      "name": "Daniel Kim",
+      "email": "daniel.kim@example.com",
+      "role": "DevOps Engineer",
+      "team": "Platform",
+      "active": true,
+      "permissions": [
+        "task:create",
+        "task:update",
+        "task:read",
+        "calendar:read"
+      ]
+    },
+    {
+      "user_id": "pm01",
+      "name": "Sam Rivera",
+      "email": "sam.rivera@example.com",
+      "role": "Project Manager",
+      "team": "Platform",
+      "active": true,
+      "permissions": [
+        "task:create",
+        "task:update",
+        "task:read",
+        "approval:review",
+        "calendar:read"
+      ]
+    },
+    {
+      "user_id": "qa01",
+      "name": "Jordan Lee",
+      "email": "jordan.lee@example.com",
+      "role": "QA Engineer",
+      "team": "Quality Engineering",
+      "active": true,
+      "permissions": [
+        "task:read",
+        "task:update",
+        "calendar:read"
+      ]
+    },
+    {
+      "user_id": "ops01",
+      "name": "Taylor Brooks",
+      "email": "taylor.brooks@example.com",
+      "role": "Operations Lead",
+      "team": "Operations",
+      "active": true,
+      "permissions": [
+        "task:read",
+        "approval:review",
+        "bulk-update:approve",
+        "deletion:approve"
+      ]
+    }
+  ]
+}

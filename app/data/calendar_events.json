@@ -1,0 +1,88 @@
+{
+  "timezone": "Asia/Kolkata",
+  "users": {
+    "dev01": [
+      {
+        "event_id": "CAL-2001",
+        "title": "Payments API review",
+        "start": "2026-10-27T10:00:00+05:30",
+        "end": "2026-10-27T10:30:00+05:30",
+        "status": "busy"
+      },
+      {
+        "event_id": "CAL-2002",
+        "title": "Platform stand-up",
+        "start": "2026-10-27T11:00:00+05:30",
+        "end": "2026-10-27T11:30:00+05:30",
+        "status": "busy"
+      },
+      {
+        "event_id": "CAL-2003",
+        "title": "Focus block",
+        "start": "2026-10-28T14:00:00+05:30",
+        "end": "2026-10-28T16:00:00+05:30",
+        "status": "busy"
+      }
+    ],
+    "dev02": [
+      {
+        "event_id": "CAL-2011",
+        "title": "Customer API pairing",
+        "start": "2026-10-27T13:00:00+05:30",
+        "end": "2026-10-27T14:00:00+05:30",
+        "status": "busy"
+      },
+      {
+        "event_id": "CAL-2012",
+        "title": "QA triage",
+        "start": "2026-10-28T10:30:00+05:30",
+        "end": "2026-10-28T11:00:00+05:30",
+        "status": "busy"
+      }
+    ],
+    "dev03": [
+      {
+        "event_id": "CAL-2021",
+        "title": "Staging deployment",
+        "start": "2026-10-27T15:00:00+05:30",
+        "end": "2026-10-27T16:00:00+05:30",
+        "status": "busy"
+      }
+    ],
+    "pm01": [
+      {
+        "event_id": "CAL-2031",
+        "title": "Platform planning",
+        "start": "2026-10-27T09:30:00+05:30",
+        "end": "2026-10-27T10:30:00+05:30",
+        "status": "busy"
+      },
+      {
+        "event_id": "CAL-2032",
+        "title": "Stakeholder sync",
+        "start": "2026-10-27T14:00:00+05:30",
+        "end": "2026-10-27T14:30:00+05:30",
+        "status": "busy"
+      }
+    ],
+    "qa01": [
+      {
+        "event_id": "CAL-2041",
+        "title": "Regression testing",
+        "start": "2026-10-27T11:00:00+05:30",
+        "end": "2026-10-27T12:30:00+05:30",
+        "status": "busy"
+      }
+    ],
+    "ops01": [
+      {
+        "event_id": "CAL-2051",
+        "title": "Operations review",
+        "start": "2026-10-28T15:00:00+05:30",
+        "end": "2026-10-28T16:00:00+05:30",
+        "status": "busy"
+      }
+    ]
+  },
+  "notes": "Synthetic calendar data for testing only. Events are illustrative; availability checks should compare requested time windows against these intervals."
+}
