@@ -113,27 +113,20 @@ perf(tools): cache embedding model instance across requests
 Run and pass all of the following locally before pushing.  These are the same checks that run in
 GitHub Actions CI.
 
-### Formatting
+### Formatting and linting
 
 ```bash
-black app/     # PEP 8-compliant auto-formatting
-isort app/     # consistent import ordering
-```
-
-### Linting
-
-```bash
-ruff check app/
+ruff format app/   # formatting
+ruff check app/    # linting (includes import ordering)
 ```
 
 ### Type checking
 
 ```bash
-mypy app/ --ignore-missing-imports
+mypy app/
 ```
 
-Type checking is recommended whenever you change typed modules.  It is not yet enforced in CI
-because the full tree is not clean, but it should pass for any code you touch.
+Type checking is enforced in CI via the `[tool.mypy]` configuration in `pyproject.toml`.
 
 ### Quick shortcut
 
@@ -251,9 +244,9 @@ Never silently swallow exceptions with `except: pass`.
   must all come from `settings`.
 - When you add a new environment variable, update **both**:
   1. `app/config/env_config.py` — typed `Settings` field with a sensible default
-  2. `env.example` — descriptive comment explaining the variable and its expected values
-- Feature flags (`USE_QDRANT`, `USE_REDIS`, `USE_SQL`, `USE_RABBITMQ`) must be respected — guard
-  new external integrations behind a flag so the app runs without that dependency.
+  2. `.env.example` — descriptive comment explaining the variable and its expected values
+- Feature flags (`USE_QDRANT`, `LANGSMITH_TRACING`) must be respected — guard new external
+  integrations behind a flag so the app runs without that dependency.
 
 ---
 
@@ -334,7 +327,7 @@ Security violations are grounds for immediate PR closure.
 
 - **Never commit secrets** — no API keys, JWT secrets, database passwords, or credentials anywhere
   in the codebase.
-- `env.example` must contain placeholder values only, e.g. `OPENAI_API_KEY=your-key-here`.
+- `.env.example` must contain placeholder values only, e.g. `OPENROUTER_API_KEY=""`.
 - Do not commit `ENV=dev` or `DEBUG=true` as a default value.
 - Changes to `app/utils/iam_utils/jwt_utils.py` or `app/utils/iam_utils/auth_utils.py` require
   **explicit maintainer review** — tag a maintainer directly in the PR.
@@ -418,13 +411,12 @@ _How was this tested? Check what applies and fill in details._
 ### Security
 - [ ] `.env` file is **not** committed
 - [ ] No secrets, API keys, tokens, or passwords anywhere in the code
-- [ ] `env.example` updated if new environment variables were added
+- [ ] `.env.example` updated if new environment variables were added
 
 ### Code Quality
-- [ ] `black app/` passes with zero errors
-- [ ] `isort app/` passes with zero errors
+- [ ] `ruff format --check app/` passes with zero errors
 - [ ] `ruff check app/` passes with zero errors
-- [ ] `mypy app/ --ignore-missing-imports` passes — *recommended; not yet required by CI*
+- [ ] `mypy app/` passes
 - [ ] No `print()` statements — structured logger used throughout
 - [ ] No hardcoded values — all sourced from `settings`
 
@@ -507,7 +499,7 @@ PRs exhibiting any of the following will be **closed immediately**.  Fix the iss
 | No tests for new business logic | Untested code enters the main branch |
 | Raw `Exception`, `ValueError`, or `HTTPException` raised in a service | Bypasses the global error handler; returns inconsistent error shapes |
 | Unrelated changes mixed in one PR | Makes review and rollback impossible |
-| New env var missing from `env.example` | Breaks deployments for all other contributors |
+| New env var missing from `.env.example` | Breaks deployments for all other contributors |
 | Public methods without docstrings | Breaks the documentation standard |
 | Branch pushed directly to `main` | Bypasses the review process entirely |
 
@@ -519,14 +511,15 @@ Copy this somewhere handy while you work:
 
 ```
 Before every push:
-  black app/ && isort app/ && ruff check app/
-  mypy app/ --ignore-missing-imports   (recommended)
+  uv run ruff check --fix app/ && uv run ruff format app/
+  uv run mypy app/
+  uv run pytest -q app/tests
 
 Before opening a PR:
   ✓ Branch name follows convention
   ✓ Commits follow Conventional Commits
   ✓ .env is NOT committed
-  ✓ env.example updated (if new vars added)
+  ✓ .env.example updated (if new vars added)
   ✓ No print() — use the structured logger
   ✓ No hardcoded values — use settings
   ✓ Custom exceptions used — no raw Exception

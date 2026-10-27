@@ -3,8 +3,7 @@
 <!-- Replace the URL below with your actual project logo/banner once available -->
 ![Agentic Web Starter](https://placehold.co/900x200?text=Agentic+Web+Starter)
 
-FastAPI-based agentic RAG service with document ingestion, retrieval-augmented chat, JWT
-authentication, and user/role management.
+FastAPI-based agentic RAG service with document ingestion and retrieval-augmented chat.
 
 ## Table of Contents
 
@@ -33,15 +32,13 @@ RAG (Retrieval-Augmented Generation) web services with FastAPI.  It ships with:
 
 - a vectorised document ingestion pipeline backed by **Qdrant**,
 - a **chat endpoint** that retrieves relevant context before querying an LLM,
-- optional **JWT-based authentication** and a full **user / role management** sub-system,
-- configurable **Redis** or in-memory chat history,
-- an optional **RabbitMQ** worker for asynchronous document processing,
+- **typed, validated settings** via `pydantic-settings`,
+- optional **LangSmith tracing** wired into the chat model,
 - a **Docusaurus** documentation site under `docs/` / `website/`, and
-- CI via GitHub Actions running Black, isort, Ruff, and Pytest on every push.
+- CI via GitHub Actions running Ruff, mypy, pytest, gitleaks, and pip-audit on every push.
 
-The starter is designed to be cloned and extended.  Disable features you do not need through
-environment flags and add your own agents, prompts, or data sources on top of the existing
-foundation.
+The starter is designed to be cloned and extended.  Add your own agents, prompts, or data
+sources on top of the existing foundation.
 
 ---
 
@@ -49,14 +46,12 @@ foundation.
 
 - **Document ingestion** — File upload and indexing into Qdrant with configurable embedding
 - **RAG chat** — Chat endpoint with retrieval augmentation and prompt orchestration
-- **Configurable memory** — Redis-backed or in-memory chat history
-- **Authentication (optional)** — JWT-based auth with optional admin user bootstrap
-- **User & role management (optional)** — CRUD for users and roles with SQLite persistence
-- **Async ingestion (optional)** — RabbitMQ worker for non-blocking document processing
+- **Validated configuration** — `pydantic-settings` model with defaults and startup validation
+- **LLM tracing (optional)** — LangSmith tracer attached to the OpenRouter chat model
 - **Global exception handling** — Consistent error responses (401, 403, 404, 422, 500)
 - **Health check** — `/health` endpoint for liveness probes
-- **Comprehensive tests** — Pytest suite runnable locally or via Docker Compose
-- **CI pipeline** — GitHub Actions: Black, isort, Ruff, and Pytest on every push
+- **Tests** — Pytest + pytest-asyncio suite runnable locally or via Docker Compose
+- **CI pipeline** — GitHub Actions: Ruff, mypy, pytest, gitleaks, and pip-audit on every push
 - **Documentation site** — Docusaurus handbook with setup, architecture, API, and contribution guides
 
 ---
@@ -65,11 +60,11 @@ foundation.
 
 ### Prerequisites
 
-- **Python 3.10+** (3.11 recommended) for local development
+- **Python 3.11 or 3.12** for local development
+- **[uv](https://docs.astral.sh/uv/)** for dependency management
 - **Docker & Docker Compose** for containerised runs (recommended for production-like setups)
-- **Qdrant** and **Redis** (included as Docker Compose services)
-- **RabbitMQ** (optional; included in Compose)
-- An **OpenAI** or **Gemini** API key for the LLM back-end
+- **Qdrant** (included as a Docker Compose service)
+- An **OpenRouter** API key for the LLM back-end
 
 ### Installation
 
@@ -83,20 +78,17 @@ foundation.
 2. **Copy the environment template and fill in your values:**
 
    ```bash
-   cp env.example .env
+   cp .env.example .env
    ```
 
    Key variables to configure:
 
    | Variable | Description |
    |----------|-------------|
-   | `OPENAI_API_KEY` / `GEMINI_API_KEY` | At least one required for chat |
-   | `JWT_SECRET_KEY` | Secret used to sign JWTs (required when `USE_SQL=true`) |
-   | `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Optional bootstrap admin user |
-   | `USE_QDRANT` | Set `false` to disable ingestion |
-   | `USE_REDIS` | Set `false` to use in-memory chat history |
-   | `USE_SQL` | Set `false` to disable IAM routes |
-   | `USE_RABBITMQ` | Set `true` to enable async ingestion via RabbitMQ |
+   | `OPENROUTER_API_KEY` | Required for the chat endpoint |
+   | `ALLOWED_ORIGINS` | Comma-separated CORS origins |
+   | `USE_QDRANT` | Set `false` to disable Qdrant retrieval |
+   | `LANGSMITH_TRACING` / `LANGSMITH_API_KEY` | Optional LangSmith tracing |
 
    See `.env.example` and the [Configuration guide](docs/configuration.md) for the full list.
 
@@ -111,17 +103,14 @@ foundation.
    *Or* bootstrap a local development environment:
 
    ```bash
-   make setup          # creates .venv, installs deps, and registers all git hooks
-   source .venv/bin/activate   # put the venv on PATH for this shell (uvicorn, local pytest, etc.)
-   docker compose up -d qdrant redis rabbitmq   # start dependencies only
-   uvicorn app.main:app --reload
+   make setup                     # uv sync + registers all git hooks
+   docker compose up -d qdrant    # start dependencies only
+   uv run uvicorn app.main:app --reload
    ```
 
-   `make setup` does not activate the virtualenv for you. Activate it in each new terminal session
-   (or use explicit paths like `.venv/bin/uvicorn`) when running the API or tests locally without
-   Docker. Pre-push hooks (`mypy`, `pytest`) use pre-commit’s own Python environment and install the
-   project there, so you do **not** need a local `.venv` on `PATH` to push—only a normal Python
-   install for `pre-commit` itself (as installed by `make setup`).
+   `make setup` runs `uv sync --extra dev` and installs the pre-commit, commit-msg, and
+   pre-push hooks. The pre-push hooks run mypy and pytest through `uv run`, so `uv` must be on
+   `PATH` when you push.
 
 ---
 
@@ -130,7 +119,6 @@ foundation.
 ### Interactive API docs
 
 Open **http://localhost:8000/docs** in your browser for Swagger UI.
-Click **Authorize** and paste your JWT to test protected endpoints.
 
 ### Quick examples
 
@@ -138,14 +126,7 @@ Click **Authorize** and paste your JWT to test protected endpoints.
 
 ```bash
 curl http://localhost:8000/health
-# {"status":"ok"}
-```
-
-**Upload a document:**
-
-```bash
-curl -X POST http://localhost:8000/api/v1/upload \
-  -F "file=@my_document.pdf"
+# {"message":"Up and running"}
 ```
 
 **Chat with RAG:**
@@ -153,15 +134,7 @@ curl -X POST http://localhost:8000/api/v1/upload \
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "Summarise the document", "session_id": "session-1"}'
-```
-
-**Login (when `USE_SQL=true`):**
-
-```bash
-curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "yourpassword"}'
+  -d '{"thread_id": "session-1", "query": "Summarise the document"}'
 ```
 
 ### Run tests
@@ -170,8 +143,8 @@ curl -X POST http://localhost:8000/api/v1/auth/login \
 # In Docker (recommended — no local deps required)
 docker compose run tests
 
-# Locally (with Qdrant + Redis running; activate .venv first or use .venv/bin/pytest)
-pytest -q app/tests
+# Locally (uv sync first)
+uv run pytest -q app/tests
 ```
 
 ### Documentation site

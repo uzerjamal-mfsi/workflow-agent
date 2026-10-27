@@ -1,4 +1,5 @@
-# Install once per clone: pre-commit install && pre-commit install --hook-type commit-msg
+# Install once per clone: pre-commit install
+# (default_install_hook_types registers the pre-commit, commit-msg and pre-push hooks.)
 # Run manually on all files: pre-commit run --all-files
 # https://pre-commit.com
 #
@@ -6,54 +7,45 @@
 # Format: <type>(<scope>): <subject>
 # Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
 
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+
 repos:
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v3.29.1
+    rev: v4.19.3
     hooks:
       - id: commitizen
         stages: [commit-msg]
-  - repo: https://github.com/psf/black
-    rev: "24.10.0"
+
+  # Single linter + formatter. Keep `rev` in sync with the ruff floor in pyproject.toml.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
     hooks:
-      - id: black
-        language_version: python3.11
+      - id: ruff
+        args: [--fix]
+        files: ^app/
+      - id: ruff-format
         files: ^app/
 
-  - repo: https://github.com/pycqa/isort
-    rev: "5.13.2"
+  # Secret scanning. The docker hook avoids requiring a Go toolchain on Windows.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
     hooks:
-      - id: isort
-        files: ^app/
+      - id: gitleaks-docker
 
   - repo: local
     hooks:
-      # language: python + additional_dependencies: hooks run in pre-commit's own venvs so
-      # bare ruff/mypy/pytest resolve without a local .venv (e.g. Docker-only workflows).
-      - id: ruff-working-dir-cache
-        name: ruff (WORKING_DIR cache)
-        language: python
-        additional_dependencies: [ruff==0.8.4]
+      - id: mypy
+        name: mypy (pre-push)
+        language: system
+        entry: uv run mypy app/
         pass_filenames: false
-        entry: >
-          bash -c '
-          if [ -f .env ]; then set -a; source .env; set +a; fi;
-          CACHE_ROOT="${WORKING_DIR:-./temp}/cache";
-          ruff check --fix --cache-dir "${CACHE_ROOT}/ruff" app/
-          '
         files: ^app/
+        stages: [pre-push]
 
-      - id: pre-push-mypy-pytest
-        name: pre-push (mypy + pytest)
-        language: python
-        additional_dependencies: ["setuptools>=68", wheel]
+      - id: pytest
+        name: pytest (pre-push)
+        language: system
+        entry: uv run pytest -q app/tests
         pass_filenames: false
-        entry: >
-          bash -c '
-          if [ -f .env ]; then set -a; source .env; set +a; fi;
-          python -m pip install -q -e ".[dev]";
-          CACHE_ROOT="${WORKING_DIR:-./temp}/cache";
-          mypy --cache-dir "${CACHE_ROOT}/mypy" app/ --ignore-missing-imports;
-          pytest -o cache_dir="${CACHE_ROOT}/pytest" -q app/tests
-          '
-        files: ^app/
+        files: ^(app/|pyproject\.toml$)
         stages: [pre-push]

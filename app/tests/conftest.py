@@ -20,6 +20,9 @@ ENV_VARS = [
     "QDRANT_HOST",
     "QDRANT_PORT",
     "QDRANT_PROTOCOL",
+    "LANGSMITH_TRACING",
+    "LANGSMITH_API_KEY",
+    "LANGSMITH_PROJECT",
 ]
 
 
@@ -53,12 +56,14 @@ def set_env_vars(monkeypatch, tmp_path):
     monkeypatch.setenv("WORKING_DIR", str(tmp_path))
 
     monkeypatch.setenv("USE_QDRANT", "true")
+
+    monkeypatch.setenv("LANGSMITH_TRACING", "false")
     return tmp_path
 
 
 @pytest.fixture
-def client(clear_env, set_env_vars, monkeypatch):
-    """Provide a TestClient for the FastAPI app."""
+def app(clear_env, set_env_vars):
+    """Provide a freshly configured FastAPI app."""
     from app.config import env_config, log_config
 
     importlib.reload(env_config)
@@ -66,5 +71,10 @@ def client(clear_env, set_env_vars, monkeypatch):
 
     from app import starter as starter_module
 
-    app = starter_module.start_application()
+    return starter_module.start_application()
+
+
+@pytest.fixture
+def client(app):
+    """Provide a TestClient for the FastAPI app."""
     yield TestClient(app)

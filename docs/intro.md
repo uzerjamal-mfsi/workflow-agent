@@ -8,24 +8,22 @@ description: What Agentic Web Starter is and how this documentation is organized
 # Introduction
 
 **Agentic Web Starter** is a production-ready FastAPI template for building AI-powered web services.
-It gives you a complete foundation — document ingestion, retrieval-augmented chat, authentication,
-and role management — so you can focus on your domain logic rather than boilerplate.
+It gives you a foundation — document ingestion, retrieval-augmented chat, validated configuration,
+and structured logging — so you can focus on your domain logic rather than boilerplate.
 
 ## What's included
 
 | Capability | Details |
 |-----------|---------|
-| **RAG pipeline** | Upload documents → embed → store in Qdrant → retrieve at chat time |
-| **Chat endpoint** | Retrieval-augmented responses via OpenAI or Gemini |
-| **Chat history** | Redis-backed (persistent) or in-memory (ephemeral), switchable via a flag |
-| **Authentication** | JWT login, token validation, and Argon2 password hashing |
-| **User & role management** | Full CRUD for users, roles, and component-level ACLs, stored in SQLite |
-| **Async ingestion** | Optional RabbitMQ worker for non-blocking document processing |
+| **RAG pipeline** | Embed documents → store in Qdrant → retrieve at chat time |
+| **Chat endpoint** | Retrieval-augmented responses via OpenRouter |
+| **Configuration** | Typed `pydantic-settings` model with startup validation |
+| **LLM tracing** | Optional LangSmith tracer attached to the chat model |
 | **Observability** | Health endpoint, structured JSON logging, and a CI pipeline |
 | **Documentation site** | This Docusaurus handbook, built from the `docs/` folder |
 
-Everything optional (Qdrant, Redis, SQL, RabbitMQ) can be toggled off with a single environment
-flag, so the service runs even in a minimal setup.
+Qdrant can be disabled with `USE_QDRANT=false`, so the service still starts without a vector
+database.
 
 ---
 
@@ -47,7 +45,7 @@ flag, so the service runs even in a minimal setup.
 
 **The code is always authoritative.** The docs explain intent; the Swagger UI at `/docs` reflects the live schema.
 
-- **Behavior and contracts** — Python source under `app/` and `env.example`
+- **Behavior and contracts** — Python source under `app/` and `.env.example`
 - **Interactive HTTP docs** — Swagger UI served at `/docs` on a running instance (see [API reference](./api-reference))
 
 ---

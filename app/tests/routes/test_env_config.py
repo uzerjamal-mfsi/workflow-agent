@@ -28,12 +28,11 @@ def test_paths_from_working_dir(clear_env, set_env_vars):
 
 
 def test_defaults_when_missing(clear_env, monkeypatch, tmp_path):
-    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: None)
-    # Minimal vars for Settings to instantiate; leave the rest unset for defaults
+    # _env_file=None keeps the local .env out of the test; only os.environ is read.
     monkeypatch.setenv("PROJECT_NAME", "TestProj")
     monkeypatch.setenv("WORKING_DIR", str(tmp_path))
     importlib.reload(env_config)
-    settings = env_config.Settings()
+    settings = env_config.Settings(_env_file=None)
 
     assert settings.ENV == "dev"
     assert settings.OPENROUTER_API_KEY is None

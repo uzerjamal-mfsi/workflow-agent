@@ -29,8 +29,8 @@ Follow these steps for every contribution:
 ```bash
 git clone https://github.com/<your-fork>/agentic_web_starter.git
 cd agentic_web_starter
-cp env.example .env          # configure your local settings
-make setup                   # creates .venv, installs deps, registers git hooks
+cp .env.example .env          # configure your local settings
+make setup                    # uv sync + registers git hooks
 ```
 
 `make setup` installs pre-commit (pre-commit, pre-push, and commit-msg stages), so formatting and
@@ -56,8 +56,9 @@ docs/update-jwt-auth-flow
 ### 4 — Check locally before pushing
 
 ```bash
-black app/ && isort app/ && ruff check app/
-pytest -q app/tests
+uv run ruff check --fix app/ && uv run ruff format app/
+uv run mypy app/
+uv run pytest -q app/tests
 ```
 
 Or let the pre-commit hooks do it for you:

@@ -28,14 +28,10 @@ We welcome and appreciate your contributions. These guidelines exist to keep col
 
    **Manual alternative (if you do not use `make`):**
    ```bash
-   python3.11 -m venv .venv
-   source .venv/bin/activate   # Windows: .venv\Scripts\activate
-   python -m pip install --upgrade pip
-   python -m pip install -e ".[dev]"
-   pre-commit install
-   pre-commit install --hook-type pre-push
+   uv sync --extra dev
+   uv run pre-commit install
    ```
-   Verify hooks on the whole tree once: `pre-commit run --all-files`
+   Verify hooks on the whole tree once: `uv run pre-commit run --all-files`
 
 4. Create a new **branch** following the naming convention:
    ```
@@ -45,12 +41,12 @@ We welcome and appreciate your contributions. These guidelines exist to keep col
 5. **Make your changes** and ensure they follow the [code rules](#code-rules).
 6. **Run quality checks** before committing (same commands as CI):
    ```bash
-   black app/ && isort app/ && ruff check app/
+   uv run ruff check --fix app/ && uv run ruff format app/
    ```
-   Optional — run mypy locally when you touch typed modules: `mypy app/ --ignore-missing-imports` (full-repo mypy is not enforced in CI yet).
+   mypy is enforced in CI: `uv run mypy app/`.
 7. **Run the test suite** and make sure everything passes:
    ```bash
-   pytest app/tests/ -v
+   uv run pytest app/tests/ -v
    # or via Docker:
    docker compose run tests
    ```
@@ -90,7 +86,7 @@ A summary of the most important rules. See the full reference in [`docs/pull-req
 - **Custom exceptions only** — raise from `app/exceptions/domain.py`, never raw `Exception`
 - **Structured logging** — use the JSON logger, never `print()`
 - **Docstrings** — all public classes and methods require Google-style docstrings
-- **No secrets committed** — `.env` is gitignored; add new vars to `env.example` instead
+- **No secrets committed** — `.env` is gitignored; add new vars to `.env.example` instead
 - **Tests required** — all new business logic must have tests covering happy path and failure cases
 
 ---
@@ -101,7 +97,7 @@ Every PR must:
 
 - Address **exactly one concern** (no mixing features and refactors)
 - Have a **filled-out PR description** using the template in [`docs/pull-request-guidelines.md`](./docs/pull-request-guidelines.md#7-pr-description--checklist)
-- Pass **all CI checks** on GitHub Actions (Black, isort, Ruff, pytest — see [`.github/workflows/ci.yml`](./.github/workflows/ci.yml); install locally with `pip install -e ".[dev]"`)
+- Pass **all CI checks** on GitHub Actions (Ruff, mypy, pytest, gitleaks, pip-audit — see [`.github/workflows/ci.yml`](./.github/workflows/ci.yml); install locally with `uv sync --extra dev`)
 - Have **at least 1 approving review** (2 for security/auth changes)
 - Have **all reviewer comments resolved** before merge
 
@@ -114,8 +110,8 @@ PRs that violate the rules in [`docs/pull-request-guidelines.md`](./docs/pull-re
 ```
 ✓ Branch name follows convention
 ✓ Commits follow Conventional Commits format
-✓ .env not committed; env.example updated if new vars added
-✓ black, isort, ruff — all pass with zero errors (mypy optional until enforced in CI)
+✓ .env not committed; .env.example updated if new vars added
+✓ ruff (lint + format) and mypy pass with zero errors
 ✓ No print() — structured logger used
 ✓ No hardcoded values — all config from settings
 ✓ Custom exceptions used — no raw Exception
