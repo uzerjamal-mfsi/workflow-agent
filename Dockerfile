@@ -30,6 +30,8 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 RUN mkdir -p /app/data
 
 COPY app/ /app/app/
+COPY alembic.ini /app/alembic.ini
+COPY migrations/ /app/migrations/
 
 EXPOSE 8000
 

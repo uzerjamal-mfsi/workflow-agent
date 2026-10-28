@@ -11,13 +11,17 @@ services:
       - WORKING_DIR=/workdir
       - GUNICORN_WORKERS=4
       - PYTHONWARNINGS=ignore
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/workflow_agent
     command: >
       sh -c "gunicorn app.main:app --preload -w $${GUNICORN_WORKERS:-4} -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"
     volumes:
       # Persist logs and model data under your host WORKING_DIR.
       - ${WORKING_DIR:-./temp}:/workdir
     depends_on:
-      - qdrant
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
 
   tests:
     build:
@@ -31,10 +35,31 @@ services:
     environment:
       - WORKING_DIR=/workdir
       - PYTHONWARNINGS=ignore
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/workflow_agent
     volumes:
       - ${WORKING_DIR:-./temp}:/workdir
     depends_on:
-      - qdrant
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: workflow_agent_postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=workflow_agent
+    ports:
+      - "5432:5432"
+    volumes:
+      - ${WORKING_DIR:-./temp}/postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d workflow_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   qdrant:
     image: qdrant/qdrant:latest

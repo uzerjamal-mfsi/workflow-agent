@@ -85,7 +85,7 @@ class QdrantRepository:
         except Exception as exc:
             logger.error("Error initializing qdrant vectordb: %s", exc)
             raise ValueError(
-                "Please make sure qdrant db is running on port 6333: " f"{exc!s}"
+                f"Please make sure qdrant db is running on port 6333: {exc!s}"
             ) from exc
 
         return vectordb

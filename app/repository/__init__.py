@@ -1,5 +1,15 @@
 """Repository layer for data access."""
 
-from app.repository.vector_repository import qdrant_repository
+from app.repository.sql_repository import (
+    PlanStepRepository,
+    TaskRepository,
+    TeamMemberRepository,
+    WorkflowExecutionRepository,
+)
 
-__all__ = ["qdrant_repository"]
+__all__ = [
+    "PlanStepRepository",
+    "TaskRepository",
+    "TeamMemberRepository",
+    "WorkflowExecutionRepository",
+]

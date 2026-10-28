@@ -50,6 +50,24 @@ Derived read-only settings (not set via env):
 
 ---
 
+## Database
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | *(required)* | Async SQLAlchemy connection URL used by the app and Alembic. Must be set in `.env` or the environment, e.g. `postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/workflow_agent`. |
+
+Apply the schema migrations with `uv run alembic upgrade head` (or `make migrate`). Create a
+new migration after changing a model with `make migration m="describe the change"`.
+
+With Docker Compose, start the database first and apply migrations inside the app image:
+
+```bash
+docker compose up -d postgres
+docker compose run --rm app alembic upgrade head
+```
+
+---
+
 ## LLM
 
 | Variable | Default | Description |

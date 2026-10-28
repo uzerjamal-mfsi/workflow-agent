@@ -1,9 +1,16 @@
 """Pytest fixtures for application tests."""
 
 import importlib
+import os
 
 import pytest
 from fastapi.testclient import TestClient
+
+# Settings require DATABASE_URL at import time; tests do not connect to it.
+os.environ.setdefault(
+    "DATABASE_URL",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/workflow_agent_test",
+)
 
 ENV_VARS = [
     "ENV",
@@ -14,6 +21,7 @@ ENV_VARS = [
     "BASE_PATH",
     "OPENROUTER_API_KEY",
     "WORKING_DIR",
+    "DATABASE_URL",
     "HF_HOME",
     "COLLECTION_NAME",
     "USE_QDRANT",
@@ -54,6 +62,11 @@ def set_env_vars(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENROUTER_API_KEY", "or-test")
 
     monkeypatch.setenv("WORKING_DIR", str(tmp_path))
+
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/workflow_agent_test",
+    )
 
     monkeypatch.setenv("USE_QDRANT", "true")
 

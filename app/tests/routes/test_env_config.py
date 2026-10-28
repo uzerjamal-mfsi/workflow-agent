@@ -14,6 +14,10 @@ def test_reads_from_env(clear_env, set_env_vars):
     assert settings.PROJECT_VERSION == "1.0.0"
     assert settings.ALLOWED_ORIGINS == ["http://localhost", "http://127.0.0.1"]
     assert settings.OPENROUTER_API_KEY == "or-test"
+    assert (
+        settings.DATABASE_URL
+        == "postgresql+asyncpg://postgres:postgres@localhost:5432/workflow_agent_test"
+    )
     assert settings.USE_QDRANT is True
 
 
@@ -31,6 +35,10 @@ def test_defaults_when_missing(clear_env, monkeypatch, tmp_path):
     # _env_file=None keeps the local .env out of the test; only os.environ is read.
     monkeypatch.setenv("PROJECT_NAME", "TestProj")
     monkeypatch.setenv("WORKING_DIR", str(tmp_path))
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/workflow_agent_test",
+    )
     importlib.reload(env_config)
     settings = env_config.Settings(_env_file=None)
 

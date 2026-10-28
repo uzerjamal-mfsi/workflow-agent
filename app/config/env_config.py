@@ -34,17 +34,20 @@ class Settings(BaseSettings):
     # 3. Working directory
     WORKING_DIR: str = ""
 
-    # 4. Hugging Face configuration
+    # 4. PostgreSQL database
+    DATABASE_URL: str
+
+    # 5. Hugging Face configuration
     HF_HOME: str = ""
 
-    # 5. Qdrant configuration
+    # 6. Qdrant configuration
     COLLECTION_NAME: str = "agentic_web_starter"
     USE_QDRANT: bool = True
     QDRANT_HOST: str = "qdrant"
     QDRANT_PORT: str = "6333"
     QDRANT_PROTOCOL: str = "http"
 
-    # 6. LangSmith tracing
+    # 7. LangSmith tracing
     LANGSMITH_TRACING: bool = False
     LANGSMITH_API_KEY: str | None = None
     LANGSMITH_PROJECT: str = "workflow-agent"
