@@ -34,3 +34,5 @@ website/build/
 
 # E2E / manual testing checklist (local notes)
 E2E_FLAG_TESTING_CHECKLIST.md
+
+agentic_web_starter/*
