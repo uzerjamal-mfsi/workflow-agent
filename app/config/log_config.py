@@ -96,6 +96,12 @@ if settings.LOG_DIR:
 logging.basicConfig(level=LOG_LEVEL, handlers=handlers)
 logger = logging.getLogger("app")
 
+
+def get_logger(name: str = "app") -> logging.Logger:
+    """Return a standard Python logger configured for the application."""
+    return logging.getLogger(name)
+
+
 # Suppress verbose third-party logs
 logging.getLogger("openrouter").setLevel(logging.WARNING)
 logging.getLogger("langchain_openrouter").setLevel(logging.WARNING)

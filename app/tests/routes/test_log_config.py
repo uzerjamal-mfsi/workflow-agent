@@ -33,3 +33,10 @@ def test_log_level_from_env(clear_env, set_env_vars):
     importlib.reload(log_config)
 
     assert log_config.LOG_LEVEL == logging.DEBUG
+
+
+def test_get_logger_standard():
+    """Verify get_logger returns a standard Python logging.Logger instance."""
+    app_logger = log_config.get_logger("jira_service")
+    assert isinstance(app_logger, logging.Logger)
+    assert app_logger.name == "jira_service"

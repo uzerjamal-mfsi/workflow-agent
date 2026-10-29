@@ -19,6 +19,7 @@ def test_reads_from_env(clear_env, set_env_vars):
         == "postgresql+asyncpg://postgres:postgres@localhost:5432/workflow_agent_test"
     )
     assert settings.USE_QDRANT is True
+    assert settings.QDRANT_URL == "http://qdrant:6333"
 
 
 def test_paths_from_working_dir(clear_env, set_env_vars):
@@ -46,3 +47,19 @@ def test_defaults_when_missing(clear_env, monkeypatch, tmp_path):
     assert settings.OPENROUTER_API_KEY is None
     assert settings.USE_QDRANT is True
     assert settings.QDRANT_HOST == "qdrant"
+    assert settings.QDRANT_URL == "http://qdrant:6333"
+
+
+def test_qdrant_url_custom(clear_env, monkeypatch, tmp_path):
+    """Verify explicit QDRANT_URL configuration."""
+    monkeypatch.setenv("PROJECT_NAME", "TestProj")
+    monkeypatch.setenv("WORKING_DIR", str(tmp_path))
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/workflow_agent_test",
+    )
+    monkeypatch.setenv("QDRANT_URL", "http://qdrant.custom:6333")
+    importlib.reload(env_config)
+    settings = env_config.Settings(_env_file=None)
+
+    assert settings.QDRANT_URL == "http://qdrant.custom:6333"

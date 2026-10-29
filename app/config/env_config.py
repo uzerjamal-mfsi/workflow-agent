@@ -37,7 +37,9 @@ class Settings(BaseSettings):
     WORKING_DIR: str = ""
 
     # 4. PostgreSQL database
-    DATABASE_URL: str
+    DATABASE_URL: str = (
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/workflow_agent"
+    )
 
     # 5. Hugging Face configuration
     HF_HOME: str = ""
@@ -48,6 +50,7 @@ class Settings(BaseSettings):
     QDRANT_HOST: str = "qdrant"
     QDRANT_PORT: str = "6333"
     QDRANT_PROTOCOL: str = "http"
+    QDRANT_URL: str | None = None
 
     # 7. LangSmith tracing
     LANGSMITH_TRACING: bool = False
@@ -65,6 +68,11 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _derive_paths_and_validate(self) -> "Settings":
         """Derive dependent paths, export HF_HOME, and validate tracing config."""
+        if not self.QDRANT_URL:
+            self.QDRANT_URL = (
+                f"{self.QDRANT_PROTOCOL}://{self.QDRANT_HOST}:{self.QDRANT_PORT}"
+            )
+
         if not self.HF_HOME:
             self.HF_HOME = os.path.join(self.WORKING_PROJECT_DIR, "hf")
         if not os.environ.get("HF_HOME"):
@@ -81,13 +89,13 @@ class Settings(BaseSettings):
         """Return the absolute working directory."""
         return os.path.abspath(self.WORKING_DIR.strip() or ".")
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def WORKING_PROJECT_DIR(self) -> str:
         """Return the project-specific directory under the working directory."""
         return os.path.join(self._base_dir, self.PROJECT_NAME)
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def LOG_DIR(self) -> str:
         """Return the log directory used by the JSON log handlers."""

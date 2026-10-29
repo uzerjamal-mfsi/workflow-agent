@@ -12,6 +12,9 @@ services:
       - GUNICORN_WORKERS=4
       - PYTHONWARNINGS=ignore
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/workflow_agent
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
     command: >
       sh -c "gunicorn app.main:app --preload -w $${GUNICORN_WORKERS:-4} -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000"
     volumes:
@@ -36,6 +39,9 @@ services:
       - WORKING_DIR=/workdir
       - PYTHONWARNINGS=ignore
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/workflow_agent
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
     volumes:
       - ${WORKING_DIR:-./temp}:/workdir
     depends_on:
