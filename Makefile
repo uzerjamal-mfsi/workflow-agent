@@ -1,4 +1,4 @@
-.PHONY: setup install-dev install-hooks lock docs docs-build migrate migration
+.PHONY: setup install-dev install-hooks lock docs docs-build migrate migration ingest-sops
 
 setup: install-dev install-hooks
 	@echo "Developer environment is ready."
@@ -11,6 +11,9 @@ install-hooks:
 
 lock:
 	uv lock
+
+ingest-sops:
+	uv run python -m app.scripts.ingest_sops
 
 migrate:
 	uv run alembic upgrade head

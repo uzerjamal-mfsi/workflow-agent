@@ -23,4 +23,5 @@ class WorkflowRequest(BaseModel):
 class AgentState(TypedDict, total=False):
     user_request: str
     parsed_goal: str
+    retrieved_sops: list[dict[str, Any]]
     plan: list[PlanStep] | list[dict[str, Any]]

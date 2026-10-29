@@ -26,6 +26,9 @@ dependencies = [
     "alembic>=1.20.1",
 ]
 
+[project.scripts]
+ingest-sops = "app.scripts.ingest_sops:main"
+
 [project.optional-dependencies]
 dev = [
     "commitizen>=4.19.3",
