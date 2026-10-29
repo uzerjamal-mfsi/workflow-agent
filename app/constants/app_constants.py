@@ -14,7 +14,7 @@ class Environment(Enum):
 class OPENROUTER_CHAT_MODEL(Enum):
     """OpenRouter chat model configuration."""
 
-    MODEL_NAME = "openrouter/auto"
+    MODEL_NAME = "nvidia/nemotron-3-ultra-550b-a55b:free"
     TEMPERATURE = 0.0
 
 

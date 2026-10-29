@@ -14,7 +14,11 @@ class OpenRouterChatClient:
 
     def __init__(self) -> None:
         """Initialize with model name and temperature from constants."""
-        self.model_name = OPENROUTER_CHAT_MODEL.MODEL_NAME.value
+        self.model_name = (
+            settings.MODEL_NAME
+            or settings.OPENROUTER_MODEL_NAME
+            or OPENROUTER_CHAT_MODEL.MODEL_NAME.value
+        )
         self.temperature = OPENROUTER_CHAT_MODEL.TEMPERATURE.value
 
     @staticmethod

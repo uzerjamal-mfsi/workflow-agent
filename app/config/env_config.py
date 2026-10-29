@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = []
     BASE_PATH: str = ""
     OPENROUTER_API_KEY: str | None = None
+    MODEL_NAME: str | None = None
+    OPENROUTER_MODEL_NAME: str | None = None
 
     # 3. Working directory
     WORKING_DIR: str = ""
