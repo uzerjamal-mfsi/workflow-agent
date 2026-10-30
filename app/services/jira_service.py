@@ -97,11 +97,7 @@ class JiraService:
     def list_tasks(self, **filters: Any) -> list[dict[str, Any]]:
         """List tasks matching exact key-value criteria."""
         tasks = self._read_tasks()
-        return [
-            t
-            for t in tasks
-            if all(t.get(k) == v for k, v in filters.items())
-        ]
+        return [t for t in tasks if all(t.get(k) == v for k, v in filters.items())]
 
     def get_overdue_high_priority_tasks(
         self, as_of: str | date | None = None

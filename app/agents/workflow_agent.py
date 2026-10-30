@@ -13,7 +13,9 @@ from app.prompts.planner_prompt import (
 )
 from app.schemas.workflow import AgentState, ExecutionPlan, PlanStep
 from app.services.core_services.sop_service import search_workflow_templates
+from app.tools.calendar_tools import check_calendar_availability_tool
 from app.tools.jira_tools import create_task_tool, update_task_tool
+from app.tools.notification_tools import send_notification_tool
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +24,7 @@ TARGET_TOOLS = (
     "create_task",
     "update_task",
     "send_notification",
+    "search_workflow_templates",
 )
 
 
@@ -83,7 +86,13 @@ def generate_plan(state: AgentState, llm=None) -> dict[str, Any]:
     }
 
 
-def execute_next_tool(state: AgentState, jira_service_instance=None) -> dict[str, Any]:
+def execute_next_tool(
+    state: AgentState,
+    jira_service_instance=None,
+    notification_service_instance=None,
+    calendar_service_instance=None,
+    retriever_fn=None,
+) -> dict[str, Any]:
     """Execute the next pending step from the plan."""
     plan = state.get("plan", [])
     completed = set(state.get("completed_steps", []))
@@ -175,6 +184,50 @@ def execute_next_tool(state: AgentState, jira_service_instance=None) -> dict[str
             else:
                 res = update_task_tool.invoke(tool_args)
 
+        elif tool_name == "search_workflow_templates":
+            query = tool_args.pop("query", None) or (
+                step.action if isinstance(step, PlanStep) else step.get("action", "")
+            )
+            search_fn = retriever_fn or search_workflow_templates
+            try:
+                res = search_fn(query=query, **tool_args)
+            except (ConnectionError, ResponseHandlingException, UnexpectedResponse):
+                res = []
+
+        elif tool_name == "send_notification":
+            recipient = (
+                tool_args.pop("recipient", None)
+                or tool_args.pop("channel", None)
+                or tool_args.pop("to", "")
+            )
+            message = tool_args.pop("message", None) or (
+                step.action if isinstance(step, PlanStep) else step.get("action", "")
+            )
+            if notification_service_instance:
+                res = notification_service_instance.send_notification(
+                    recipient=recipient, message=message, **tool_args
+                )
+            else:
+                res = send_notification_tool.invoke(
+                    {"recipient": recipient, "message": message, **tool_args}
+                )
+
+        elif tool_name == "check_calendar_availability":
+            user_id = tool_args.pop("user_id", "")
+            if not user_id and not tool_args.get("date"):
+                logger.info("No-op stub for tool: %s", tool_name)
+                res = {"status": "skipped", "tool_name": tool_name}
+            else:
+                date = tool_args.pop("date", "2026-10-27")
+                if calendar_service_instance:
+                    res = calendar_service_instance.check_calendar_availability(
+                        user_id=user_id, date=date, **tool_args
+                    )
+                else:
+                    res = check_calendar_availability_tool.invoke(
+                        {"user_id": user_id, "date": date, **tool_args}
+                    )
+
         else:
             logger.info("No-op stub for tool: %s", tool_name)
             res = {"status": "skipped", "tool_name": tool_name}
@@ -235,7 +288,13 @@ def verify_step(state: AgentState) -> dict[str, Any]:
     }
 
 
-def create_workflow_graph(llm=None, retriever_fn=None, jira_service_instance=None):
+def create_workflow_graph(
+    llm=None,
+    retriever_fn=None,
+    jira_service_instance=None,
+    notification_service_instance=None,
+    calendar_service_instance=None,
+):
     workflow = StateGraph(AgentState)
     workflow.add_node("parse_goal", parse_goal)
     workflow.add_node(
@@ -250,13 +309,13 @@ def create_workflow_graph(llm=None, retriever_fn=None, jira_service_instance=Non
     )
     workflow.add_node(
         "execute_next_tool",
-        (
-            lambda state: execute_next_tool(
-                state, jira_service_instance=jira_service_instance
-            )
-        )
-        if jira_service_instance
-        else execute_next_tool,
+        lambda state: execute_next_tool(
+            state,
+            jira_service_instance=jira_service_instance,
+            notification_service_instance=notification_service_instance,
+            calendar_service_instance=calendar_service_instance,
+            retriever_fn=retriever_fn,
+        ),
     )
     workflow.add_node("verify_step", verify_step)
 

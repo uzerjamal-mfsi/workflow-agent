@@ -240,4 +240,3 @@ if __name__ == "__main__":
     logger.info("Executing SOP ingestion...")
     documents = ingest_sops()
     logger.info("Successfully ingested %d SOP documents.", len(documents))
-
