@@ -17,6 +17,7 @@ def test_plan_step_validation():
     assert step.tool_name == "retriever"
     assert step.tool_args == {"query": "agent workflow"}
     assert step.depends_on == []
+    assert step.status == "pending"
 
 
 def test_plan_step_with_dependencies():
@@ -29,6 +30,7 @@ def test_plan_step_with_dependencies():
         depends_on=["step_1"],
     )
     assert step.depends_on == ["step_1"]
+    assert step.status == "pending"
 
 
 def test_execution_plan_validation():
@@ -47,6 +49,7 @@ def test_execution_plan_validation():
     assert plan.goal == "Answer architecture query"
     assert len(plan.steps) == 1
     assert plan.steps[0].step_id == "step_1"
+    assert plan.steps[0].status == "pending"
 
 
 def test_workflow_request_validation():
@@ -70,11 +73,21 @@ def test_agent_state_dict():
                 "tool_name": "retriever",
                 "tool_args": {},
                 "depends_on": [],
+                "status": "pending",
             }
         ],
+        "completed_steps": ["step_0"],
+        "pending_steps": ["step_1"],
+        "failed_steps": [],
+        "current_step_id": "step_1",
+        "step_results": {"step_0": {"status": "ok"}},
     }
     assert state["user_request"] == "Execute task"
     assert len(state["plan"]) == 1
+    assert state["completed_steps"] == ["step_0"]
+    assert state["pending_steps"] == ["step_1"]
+    assert state["current_step_id"] == "step_1"
+    assert state["step_results"] == {"step_0": {"status": "ok"}}
 
     partial_state: AgentState = {"user_request": "Partial task"}
     assert "user_request" in partial_state

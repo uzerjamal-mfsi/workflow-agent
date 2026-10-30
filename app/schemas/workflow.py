@@ -9,6 +9,7 @@ class PlanStep(BaseModel):
     tool_name: str
     tool_args: dict[str, Any] = Field(default_factory=dict)
     depends_on: list[str] = Field(default_factory=list)
+    status: str = "pending"
 
 
 class ExecutionPlan(BaseModel):
@@ -25,3 +26,8 @@ class AgentState(TypedDict, total=False):
     parsed_goal: str
     retrieved_sops: list[dict[str, Any]]
     plan: list[PlanStep] | list[dict[str, Any]]
+    completed_steps: list[str]
+    pending_steps: list[str]
+    failed_steps: list[str]
+    current_step_id: str | None
+    step_results: dict[str, Any]

@@ -6,6 +6,8 @@ import os
 import pytest
 from fastapi.testclient import TestClient
 
+from app.services.jira_service import DEFAULT_TASKS
+
 # Settings require DATABASE_URL at import time; tests do not connect to it.
 os.environ.setdefault(
     "DATABASE_URL",
@@ -34,6 +36,18 @@ ENV_VARS = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def preserve_sample_tasks():
+    """Ensure sample tasks.json remains unmodified across tests."""
+    original = (
+        DEFAULT_TASKS.read_text(encoding="utf-8") if DEFAULT_TASKS.exists() else None
+    )
+    yield
+    if original is not None and DEFAULT_TASKS.exists():
+        if DEFAULT_TASKS.read_text(encoding="utf-8") != original:
+            DEFAULT_TASKS.write_text(original, encoding="utf-8")
+
+
 @pytest.fixture
 def clear_env(monkeypatch):
     """Remove standard env vars so tests start with clean state."""
@@ -43,15 +57,7 @@ def clear_env(monkeypatch):
 
 @pytest.fixture
 def set_env_vars(monkeypatch, tmp_path):
-    """Set required env vars for test runs.
-
-    Args:
-        monkeypatch: Pytest monkeypatch.
-        tmp_path: Temporary directory path.
-
-    Returns:
-        tmp_path for use by dependent fixtures.
-    """
+    """Set required env vars for test runs."""
     monkeypatch.setenv("ENV", "dev")
     monkeypatch.setenv("PROJECT_NAME", "TestProj")
     monkeypatch.setenv("PROJECT_VERSION", "1.0.0")
