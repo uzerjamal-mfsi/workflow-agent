@@ -1,5 +1,7 @@
 import copy
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
@@ -19,6 +21,15 @@ from app.tools.notification_tools import send_notification_tool
 
 logger = logging.getLogger(__name__)
 
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DEFAULT_TEAM = DATA_DIR / "team_directory.json"
+
+TOOL_PERMISSIONS = {
+    "create_task": "task:create",
+    "update_task": "task:update",
+    "check_calendar_availability": "calendar:read",
+}
+
 TARGET_TOOLS = (
     "check_calendar_availability",
     "create_task",
@@ -26,6 +37,47 @@ TARGET_TOOLS = (
     "send_notification",
     "search_workflow_templates",
 )
+
+
+def _read_team_directory(team_path: str | Path) -> dict[str, Any]:
+    path = Path(team_path)
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _check_step_permission(
+    step: PlanStep | dict[str, Any],
+    team_data: dict[str, Any],
+) -> tuple[bool, str | None]:
+    tool = getattr(step, "tool_name", None) or (
+        step.get("tool_name", "") if isinstance(step, dict) else ""
+    )
+    args = getattr(step, "tool_args", None) or (
+        step.get("tool_args", {}) if isinstance(step, dict) else {}
+    )
+    if not isinstance(args, dict):
+        args = {}
+
+    user_id = args.get("user_id") or args.get("assignee")
+    req_perm = args.get("required_permission") or TOOL_PERMISSIONS.get(tool)
+
+    users = team_data.get("users", [])
+    if not users or not user_id:
+        return True, None
+
+    user = next((u for u in users if u.get("user_id") == user_id), None)
+    if not user:
+        return False, f"User '{user_id}' not found in team directory"
+    if not user.get("active", True):
+        return False, f"User '{user_id}' is inactive"
+    if req_perm and req_perm not in user.get("permissions", []):
+        return False, f"User '{user_id}' lacks permission '{req_perm}'"
+
+    return True, None
 
 
 def parse_goal(state: AgentState) -> dict[str, Any]:
@@ -86,6 +138,83 @@ def generate_plan(state: AgentState, llm=None) -> dict[str, Any]:
     }
 
 
+def validate_dependencies(
+    state: AgentState, team_path: str | Path | None = None
+) -> dict[str, Any]:
+    """Select next runnable step with resolved dependencies and permissions."""
+    plan = list(state.get("plan", []))
+    pending = list(state.get("pending_steps", []))
+    completed = set(state.get("completed_steps", []))
+    failed = list(state.get("failed_steps", []))
+    results = dict(state.get("step_results", {}))
+
+    plan_map = {
+        getattr(s, "step_id", None)
+        or (s.get("step_id") if isinstance(s, dict) else ""): s
+        for s in plan
+    }
+    team_data = _read_team_directory(team_path or DEFAULT_TEAM)
+
+    def fail_step(sid: str, error: str):
+        if sid in pending:
+            pending.remove(sid)
+        if sid not in failed:
+            failed.append(sid)
+        step = plan_map.get(sid)
+        if hasattr(step, "status"):
+            step.status = "failed"
+        elif isinstance(step, dict):
+            step["status"] = "failed"
+        results[sid] = {"status": "failed", "error": error}
+
+    def cascade_failures():
+        changed = True
+        while changed:
+            changed = False
+            for sid in list(pending):
+                step = plan_map.get(sid)
+                deps = (
+                    getattr(step, "depends_on", None)
+                    or (step.get("depends_on") if isinstance(step, dict) else [])
+                    or []
+                )
+                if any(d in failed for d in deps):
+                    fail_step(sid, "Dependency failed")
+                    changed = True
+
+    cascade_failures()
+
+    selected_id = None
+    for sid in list(pending):
+        step = plan_map.get(sid)
+        deps = (
+            getattr(step, "depends_on", None)
+            or (step.get("depends_on") if isinstance(step, dict) else [])
+            or []
+        )
+        if all(d in completed for d in deps):
+            ok, err = _check_step_permission(step, team_data)
+            if ok:
+                selected_id = sid
+            else:
+                fail_step(sid, err or "Permission denied")
+                cascade_failures()
+                selected_id = sid
+            break
+
+    if not selected_id and pending:
+        for sid in list(pending):
+            fail_step(sid, "Unresolvable dependency")
+        selected_id = failed[-1] if failed else None
+
+    return {
+        "current_step_id": selected_id,
+        "pending_steps": pending,
+        "failed_steps": failed,
+        "step_results": results,
+    }
+
+
 def execute_next_tool(
     state: AgentState,
     jira_service_instance=None,
@@ -111,10 +240,12 @@ def execute_next_tool(
         ]
     )
 
-    if not pending:
-        return {"current_step_id": None}
+    step_id = state.get("current_step_id")
+    if not step_id:
+        if not pending:
+            return {"current_step_id": None}
+        step_id = pending[0]
 
-    step_id = pending[0]
     step = next(
         (
             s
@@ -125,6 +256,18 @@ def execute_next_tool(
     )
     if not step:
         return {"current_step_id": None}
+
+    results = dict(state.get("step_results", {}))
+
+    # Skip tool execution if already marked failed during validation
+    if step_id in failed or (
+        step_id in results and results[step_id].get("status") == "failed"
+    ):
+        return {
+            "current_step_id": step_id,
+            "pending_steps": pending,
+            "step_results": results,
+        }
 
     tool_name = (
         step.tool_name if isinstance(step, PlanStep) else step.get("tool_name", "")
@@ -288,13 +431,45 @@ def verify_step(state: AgentState) -> dict[str, Any]:
     }
 
 
+def escalate(state: AgentState) -> dict[str, Any]:
+    """Handle step failure by logging and recording escalation."""
+    failed_step = state.get("current_step_id")
+    logger.warning("Step %s failed, escalating workflow", failed_step)
+    return {"escalated": True}
+
+
+replan = escalate
+
+
+def route_after_verify(state: AgentState) -> str:
+    """Route to validate_dependencies, escalate, or END based on step outcome."""
+    current_step = state.get("current_step_id")
+    failed = state.get("failed_steps", [])
+    if (current_step and current_step in failed) or (not current_step and failed):
+        return "escalate"
+
+    pending = state.get("pending_steps", [])
+    if pending:
+        return "validate_dependencies"
+
+    return END
+
+
 def create_workflow_graph(
     llm=None,
     retriever_fn=None,
     jira_service_instance=None,
     notification_service_instance=None,
     calendar_service_instance=None,
+    team_path=None,
 ):
+    team_file = (
+        team_path
+        or getattr(jira_service_instance, "team_path", None)
+        or getattr(notification_service_instance, "team_path", None)
+        or DEFAULT_TEAM
+    )
+
     workflow = StateGraph(AgentState)
     workflow.add_node("parse_goal", parse_goal)
     workflow.add_node(
@@ -308,6 +483,10 @@ def create_workflow_graph(
         (lambda state: generate_plan(state, llm=llm)) if llm else generate_plan,
     )
     workflow.add_node(
+        "validate_dependencies",
+        lambda state: validate_dependencies(state, team_path=team_file),
+    )
+    workflow.add_node(
         "execute_next_tool",
         lambda state: execute_next_tool(
             state,
@@ -318,13 +497,24 @@ def create_workflow_graph(
         ),
     )
     workflow.add_node("verify_step", verify_step)
+    workflow.add_node("escalate", escalate)
 
     workflow.add_edge(START, "parse_goal")
     workflow.add_edge("parse_goal", "retrieve_sops")
     workflow.add_edge("retrieve_sops", "generate_plan")
-    workflow.add_edge("generate_plan", "execute_next_tool")
+    workflow.add_edge("generate_plan", "validate_dependencies")
+    workflow.add_edge("validate_dependencies", "execute_next_tool")
     workflow.add_edge("execute_next_tool", "verify_step")
-    workflow.add_edge("verify_step", END)
+    workflow.add_conditional_edges(
+        "verify_step",
+        route_after_verify,
+        {
+            "validate_dependencies": "validate_dependencies",
+            "escalate": "escalate",
+            END: END,
+        },
+    )
+    workflow.add_edge("escalate", END)
     return workflow.compile()
 
 

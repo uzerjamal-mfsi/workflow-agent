@@ -89,13 +89,13 @@ class Settings(BaseSettings):
         """Return the absolute working directory."""
         return os.path.abspath(self.WORKING_DIR.strip() or ".")
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def WORKING_PROJECT_DIR(self) -> str:
         """Return the project-specific directory under the working directory."""
         return os.path.join(self._base_dir, self.PROJECT_NAME)
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def LOG_DIR(self) -> str:
         """Return the log directory used by the JSON log handlers."""

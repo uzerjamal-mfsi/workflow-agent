@@ -31,3 +31,4 @@ class AgentState(TypedDict, total=False):
     failed_steps: list[str]
     current_step_id: str | None
     step_results: dict[str, Any]
+    escalated: bool

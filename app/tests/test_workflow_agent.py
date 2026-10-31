@@ -7,9 +7,11 @@ import pytest
 from app.agents.workflow_agent import (
     TARGET_TOOLS,
     create_workflow_graph,
+    escalate,
     execute_next_tool,
     generate_plan,
     parse_goal,
+    validate_dependencies,
     verify_step,
     workflow_graph,
 )
@@ -273,14 +275,11 @@ def test_workflow_graph_tool_execution_updates_state(tmp_path: Path):
     graph = create_workflow_graph(llm=mock_llm, jira_service_instance=isolated_jira)
     result = graph.invoke({"user_request": EXAMPLE_REQUESTS[0]})
 
-    # First step in plan is check_calendar_availability (stub)
-    assert result["current_step_id"] == "step_1"
-    assert result["completed_steps"] == ["step_1"]
-    assert result["pending_steps"] == ["step_2", "step_3", "step_4"]
+    assert result["completed_steps"] == ["step_1", "step_2", "step_3", "step_4"]
+    assert result["pending_steps"] == []
     assert result["failed_steps"] == []
     assert "step_1" in result["step_results"]
-    assert result["plan"][0].status == "completed"
-    assert result["plan"][1].status == "pending"
+    assert all(step.status == "completed" for step in result["plan"])
 
 
 def test_jira_langchain_tools_execution(tmp_path: Path):
@@ -309,3 +308,169 @@ def test_jira_langchain_tools_execution(tmp_path: Path):
 
         tasks = list_tasks_tool.invoke({"task_id": created["task_id"]})
         assert len(tasks) == 1
+
+
+def test_workflow_graph_dependent_plan_execution():
+    """Verify 4-step dependent plan executes strictly in dependency order and loops until completion."""
+    call_order = []
+
+    def mock_jira_create(title, assignee="dev01", priority="Medium", **kwargs):
+        call_order.append("step_2")
+        return {"task_id": "TASK-201", "title": title}
+
+    def mock_jira_update(task_id, fields=None, **kwargs):
+        call_order.append("step_3")
+        return {"task_id": task_id, "status": "In Progress"}
+
+    def mock_notif_send(recipient, message, **kwargs):
+        call_order.append("step_4")
+        return {"status": "sent", "recipient": recipient}
+
+    def mock_cal_check(user_id, date="2026-10-27", **kwargs):
+        call_order.append("step_1")
+        return {"status": "success", "user_id": user_id, "available": True}
+
+    mock_jira = MagicMock()
+    mock_jira.create_task.side_effect = mock_jira_create
+    mock_jira.update_task.side_effect = mock_jira_update
+    mock_notif = MagicMock()
+    mock_notif.send_notification.side_effect = mock_notif_send
+    mock_cal = MagicMock()
+    mock_cal.check_calendar_availability.side_effect = mock_cal_check
+
+    # Deliberately unordered steps to ensure execution order is driven strictly by dependencies
+    plan = ExecutionPlan(
+        goal="Execute dependent pipeline",
+        steps=[
+            PlanStep(
+                step_id="step_4",
+                action="Notify PM",
+                tool_name="send_notification",
+                tool_args={"recipient": "pm01", "message": "Done"},
+                depends_on=["step_3"],
+            ),
+            PlanStep(
+                step_id="step_2",
+                action="Create task",
+                tool_name="create_task",
+                tool_args={"title": "Setup job", "assignee": "dev01"},
+                depends_on=["step_1"],
+            ),
+            PlanStep(
+                step_id="step_1",
+                action="Check calendar",
+                tool_name="check_calendar_availability",
+                tool_args={"user_id": "dev01", "date": "2026-10-27"},
+                depends_on=[],
+            ),
+            PlanStep(
+                step_id="step_3",
+                action="Update task",
+                tool_name="update_task",
+                tool_args={"task_id": "step_2", "fields": {"status": "In Progress"}},
+                depends_on=["step_2"],
+            ),
+        ],
+    )
+
+    mock_llm = MagicMock()
+    mock_llm.with_structured_output.return_value.invoke.return_value = plan
+
+    graph = create_workflow_graph(
+        llm=mock_llm,
+        jira_service_instance=mock_jira,
+        notification_service_instance=mock_notif,
+        calendar_service_instance=mock_cal,
+    )
+    result = graph.invoke({"user_request": "Execute dependent pipeline"})
+
+    assert call_order == ["step_1", "step_2", "step_3", "step_4"]
+    assert result["completed_steps"] == ["step_1", "step_2", "step_3", "step_4"]
+    assert result["pending_steps"] == []
+    assert result["failed_steps"] == []
+    assert all(s.status == "completed" for s in result["plan"])
+
+
+def test_validate_dependencies_selects_first_satisfied_step():
+    """Verify validate_dependencies selects the first step with satisfied dependencies."""
+    steps = [
+        PlanStep(step_id="step_2", action="Step 2", tool_name="create_task", depends_on=["step_1"]),
+        PlanStep(step_id="step_1", action="Step 1", tool_name="check_calendar_availability", depends_on=[]),
+    ]
+    state: AgentState = {
+        "plan": steps,
+        "pending_steps": ["step_2", "step_1"],
+        "completed_steps": [],
+        "failed_steps": [],
+        "step_results": {},
+    }
+    result = validate_dependencies(state)
+    assert result["current_step_id"] == "step_1"
+
+
+def test_validate_dependencies_cascades_failed_dependency():
+    """Verify validate_dependencies marks dependent steps as failed when parent step failed."""
+    steps = [
+        PlanStep(step_id="step_1", action="Step 1", tool_name="check_calendar_availability", status="failed"),
+        PlanStep(step_id="step_2", action="Step 2", tool_name="create_task", depends_on=["step_1"]),
+        PlanStep(step_id="step_3", action="Step 3", tool_name="update_task", depends_on=["step_2"]),
+    ]
+    state: AgentState = {
+        "plan": steps,
+        "pending_steps": ["step_2", "step_3"],
+        "completed_steps": [],
+        "failed_steps": ["step_1"],
+        "step_results": {"step_1": {"status": "failed", "error": "Calendar service unreachable"}},
+    }
+    result = validate_dependencies(state)
+    assert result["pending_steps"] == []
+    assert "step_2" in result["failed_steps"]
+    assert "step_3" in result["failed_steps"]
+    assert steps[1].status == "failed"
+    assert steps[2].status == "failed"
+
+
+def test_validate_dependencies_permission_check():
+    """Verify validate_dependencies fails steps when user lacks required permission."""
+    step = PlanStep(
+        step_id="step_1",
+        action="Create task with QA user",
+        tool_name="create_task",
+        tool_args={"assignee": "qa01", "title": "QA Test"},
+        depends_on=[],
+    )
+    state: AgentState = {
+        "plan": [step],
+        "pending_steps": ["step_1"],
+        "completed_steps": [],
+        "failed_steps": [],
+        "step_results": {},
+    }
+    result = validate_dependencies(state)
+    assert "step_1" in result["failed_steps"]
+    assert result["step_results"]["step_1"]["status"] == "failed"
+    assert "permission" in result["step_results"]["step_1"]["error"].lower()
+
+
+def test_workflow_graph_failure_escalates():
+    """Verify workflow graph routes to escalate node when a tool fails."""
+    plan = ExecutionPlan(
+        goal="Run failing step",
+        steps=[
+            PlanStep(
+                step_id="step_fail",
+                action="Fail step",
+                tool_name="create_task",
+                tool_args={"assignee": "qa01", "title": "Unauthorized"},
+                depends_on=[],
+            ),
+        ],
+    )
+    mock_llm = MagicMock()
+    mock_llm.with_structured_output.return_value.invoke.return_value = plan
+
+    graph = create_workflow_graph(llm=mock_llm)
+    result = graph.invoke({"user_request": "Run failing step"})
+
+    assert result.get("escalated") is True
+    assert "step_fail" in result["failed_steps"]

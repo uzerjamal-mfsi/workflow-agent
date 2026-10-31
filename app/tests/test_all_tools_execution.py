@@ -207,9 +207,8 @@ def test_graph_executes_all_new_tools(isolated_services):
 
     result = graph.invoke({"user_request": "Schedule review, create task, notify PM"})
 
-    # Graph executes first step (check_calendar_availability)
-    assert result["current_step_id"] == "step_1"
-    assert result["completed_steps"] == ["step_1"]
+    assert result["completed_steps"] == ["step_1", "step_2", "step_3", "step_4"]
+    assert result["pending_steps"] == []
     assert "step_1" in result["step_results"]
     assert result["step_results"]["step_1"]["status"] == "success"
-    assert result["plan"][0].status == "completed"
+    assert all(step.status == "completed" for step in result["plan"])
