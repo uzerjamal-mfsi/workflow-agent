@@ -21,11 +21,16 @@ async def chat(request: ChatRequest):
     if not query:
         raise ValidationError("Provide a query or user_request.")
 
-    result = workflow_graph.invoke({"user_request": query})
+    thread_id = request.thread_id or "default"
+    config = {"configurable": {"thread_id": thread_id}}
+    result = workflow_graph.invoke(
+        {"user_request": query, "thread_id": thread_id},
+        config=config,
+    )
     steps = result.get("plan", [])
     goal = result.get("parsed_goal", query)
     return ChatResponse(
-        thread_id=request.thread_id,
+        thread_id=thread_id,
         answer=format_plan_answer(goal, steps),
         plan=steps,
     )

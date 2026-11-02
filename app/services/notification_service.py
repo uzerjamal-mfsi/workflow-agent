@@ -1,7 +1,14 @@
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from sqlalchemy import delete
+from sqlalchemy.orm import Session
+
+from app.config.db_config import get_sync_engine
+from app.models import SentNotification
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DEFAULT_TEAM = DATA_DIR / "team_directory.json"
@@ -15,9 +22,11 @@ class NotificationService:
         self,
         team_path: str | Path = DEFAULT_TEAM,
         templates_path: str | Path = DEFAULT_TEMPLATES,
+        engine=None,
     ) -> None:
         self.team_path = Path(team_path)
         self.templates_path = Path(templates_path)
+        self.engine = engine or get_sync_engine()
         self.sent_notifications: list[dict[str, Any]] = []
 
     def _read_team(self) -> dict[str, Any]:
@@ -112,6 +121,7 @@ class NotificationService:
             final_message = message
 
         record = {
+            "id": f"NOTIF-{len(self.sent_notifications) + 1:04d}",
             "notification_id": f"NOTIF-{len(self.sent_notifications) + 1:04d}",
             "recipient": recipient,
             "recipient_id": user.get("user_id") if user else None,
@@ -123,7 +133,22 @@ class NotificationService:
             "status": "sent",
         }
         self.sent_notifications.append(record)
+        self._persist_notification(record)
         return record
+
+    def _persist_notification(self, record: dict[str, Any]) -> None:
+        try:
+            with Session(self.engine) as session:
+                entry = SentNotification(
+                    id=record["notification_id"],
+                    recipient=record["recipient"],
+                    message=record["message"],
+                    created_at=datetime.now(timezone.utc),
+                )
+                session.add(entry)
+                session.commit()
+        except Exception:
+            pass
 
 
 _default_notification_service = NotificationService()
@@ -140,3 +165,9 @@ def get_sent_notifications() -> list[dict[str, Any]]:
 def clear_sent_notifications() -> None:
     """Clear sent notification records."""
     _default_notification_service.sent_notifications.clear()
+    try:
+        with Session(_default_notification_service.engine) as session:
+            session.execute(delete(SentNotification))
+            session.commit()
+    except Exception:
+        pass

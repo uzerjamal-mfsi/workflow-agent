@@ -18,6 +18,10 @@ COPY pyproject.toml .
 
 RUN pip install --no-cache-dir .
 
+COPY app/ /app/app/
+COPY alembic.ini /app/alembic.ini
+COPY migrations/ /app/migrations/
+
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 

@@ -24,6 +24,8 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.1.6",
     "asyncpg>=0.32.0",
     "alembic>=1.20.1",
+    "langgraph-checkpoint-postgres>=3.2.0",
+    "psycopg[binary,pool]>=3.3.7",
 ]
 
 [project.scripts]

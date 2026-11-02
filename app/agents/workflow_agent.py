@@ -2,9 +2,12 @@ import copy
 import hashlib
 import json
 import logging
+import os
+import uuid
 from pathlib import Path
 from typing import Any
 
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 
@@ -17,6 +20,11 @@ from app.prompts.planner_prompt import (
 )
 from app.schemas.workflow import AgentState, ExecutionPlan, PlanStep
 from app.services.core_services.sop_service import search_workflow_templates
+from app.services.persistence_service import (
+    get_idempotency_record,
+    save_idempotency_record,
+    update_workflow_status,
+)
 from app.tools.calendar_tools import check_calendar_availability_tool
 from app.tools.jira_tools import create_task_tool, update_task_tool
 from app.tools.notification_tools import send_notification_tool
@@ -120,7 +128,11 @@ def _check_step_permission(
 
 def parse_goal(state: AgentState) -> dict[str, Any]:
     """Extract a concise goal string from the user request."""
-    return {"parsed_goal": state.get("user_request", "").strip()}
+    goal = state.get("user_request", "").strip()
+    tid = state.get("thread_id")
+    if tid:
+        update_workflow_status(tid, status="running", user_request=goal)
+    return {"parsed_goal": goal}
 
 
 def retrieve_sops(state: AgentState, search_fn=None) -> dict[str, Any]:
@@ -344,6 +356,16 @@ def execute_next_tool(
                 "step_results": results,
                 "executed_keys": executed_keys,
             }
+        saved_record = get_idempotency_record(idempotency_key)
+        if saved_record is not None:
+            executed_keys[idempotency_key] = saved_record
+            results[step_id] = saved_record
+            return {
+                "current_step_id": step_id,
+                "pending_steps": pending,
+                "step_results": results,
+                "executed_keys": executed_keys,
+            }
 
     try:
         if tool_name == "create_task":
@@ -444,6 +466,13 @@ def execute_next_tool(
         isinstance(res, dict) and (res.get("status") == "failed" or "error" in res)
     ):
         executed_keys[idempotency_key] = res
+        save_idempotency_record(
+            key=idempotency_key,
+            step_id=step_id,
+            tool_name=tool_name,
+            result=res,
+            status="completed",
+        )
 
     return {
         "current_step_id": step_id,
@@ -522,6 +551,11 @@ def verify_step(state: AgentState) -> dict[str, Any]:
         elif isinstance(step, dict):
             step["status"] = status
 
+    if not pending and not failed:
+        tid = state.get("thread_id")
+        if tid:
+            update_workflow_status(tid, status="completed")
+
     return {
         "pending_steps": pending,
         "completed_steps": completed,
@@ -533,6 +567,9 @@ def escalate(state: AgentState) -> dict[str, Any]:
     """Handle step failure by logging and recording escalation."""
     failed_step = state.get("current_step_id")
     logger.warning("Step %s failed, escalating workflow", failed_step)
+    tid = state.get("thread_id")
+    if tid:
+        update_workflow_status(tid, status="failed")
     return {"escalated": True}
 
 
@@ -559,6 +596,37 @@ def route_after_verify(state: AgentState) -> str:
     return END
 
 
+def get_checkpointer(db_url: str | None = None):
+    """Return PostgresSaver if PostgreSQL is configured, else InMemorySaver."""
+    from app.config.env_config import settings
+
+    url = (
+        db_url
+        or os.getenv("CHECKPOINTER_DATABASE_URL")
+        or getattr(settings, "DATABASE_URL", None)
+        or os.getenv("DATABASE_URL")
+    )
+    if url and "postgres" in url:
+        try:
+            import psycopg_pool
+            from langgraph.checkpoint.postgres import PostgresSaver
+
+            pg_url = (
+                url.replace("postgresql+asyncpg://", "postgresql://")
+                .replace("postgresql+psycopg://", "postgresql://")
+            )
+            pool = psycopg_pool.ConnectionPool(
+                pg_url, min_size=1, max_size=10, open=True, kwargs={"autocommit": True}
+            )
+            saver = PostgresSaver(pool)
+            saver.setup()
+            return saver
+        except Exception as err:
+            logger.warning("PostgresSaver unavailable, fallback to InMemorySaver: %s", err)
+            return InMemorySaver()
+    return InMemorySaver()
+
+
 def create_workflow_graph(
     llm=None,
     retriever_fn=None,
@@ -566,6 +634,7 @@ def create_workflow_graph(
     notification_service_instance=None,
     calendar_service_instance=None,
     team_path=None,
+    checkpointer=None,
 ):
     team_file = (
         team_path
@@ -620,7 +689,29 @@ def create_workflow_graph(
         },
     )
     workflow.add_edge("escalate", END)
-    return workflow.compile()
+
+    saver = checkpointer if checkpointer is not None else get_checkpointer()
+    compiled = workflow.compile(checkpointer=saver)
+
+    orig_invoke = compiled.invoke
+
+    def _invoke(
+        input_data: Any,
+        config: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        cfg = dict(config or {})
+        configurable = dict(cfg.get("configurable") or {})
+        if "thread_id" not in configurable:
+            tid = None
+            if isinstance(input_data, dict):
+                tid = input_data.get("thread_id")
+            configurable["thread_id"] = str(tid or uuid.uuid4())
+            cfg["configurable"] = configurable
+        return orig_invoke(input_data, config=cfg, **kwargs)
+
+    compiled.invoke = _invoke
+    return compiled
 
 
 workflow_graph = create_workflow_graph()

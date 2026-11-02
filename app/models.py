@@ -1,7 +1,7 @@
 """SQLAlchemy models."""
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import sqlalchemy as sa
@@ -34,37 +34,50 @@ class Task(Base):
     """A task tracked by the workflow agent."""
 
     __tablename__ = "tasks"
-    __table_args__ = (
-        sa.CheckConstraint(
-            "status IN ('open', 'in_progress', 'blocked', 'completed', 'cancelled')",
-            name="ck_tasks_status",
-        ),
-        sa.CheckConstraint(
-            "priority IN ('low', 'medium', 'high', 'urgent')",
-            name="ck_tasks_priority",
-        ),
-        sa.UniqueConstraint("external_id", name="uq_tasks_external_id"),
+
+    id: Mapped[str] = mapped_column(sa.String(50), primary_key=True)
+    title: Mapped[str] = mapped_column(sa.String(255))
+    assignee: Mapped[str] = mapped_column(sa.String(100), default="dev01")
+    status: Mapped[str] = mapped_column(sa.String(50), default="Open")
+    priority: Mapped[str] = mapped_column(sa.String(50), default="Medium")
+    due_date: Mapped[date | None] = mapped_column(sa.Date, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        server_default=sa.text("now()"),
+        onupdate=sa.func.now(),
     )
 
-    id: Mapped[int] = mapped_column(
-        sa.BigInteger, sa.Identity(always=True), primary_key=True
-    )
-    external_id: Mapped[str] = mapped_column(sa.String(50))
-    title: Mapped[str] = mapped_column(sa.String(255))
-    assignee_id: Mapped[int | None] = mapped_column(
-        sa.BigInteger,
-        sa.ForeignKey("team_members.id", name="fk_tasks_assignee_id_team_members"),
-    )
-    status: Mapped[str] = mapped_column(sa.String(20), server_default=sa.text("'open'"))
-    priority: Mapped[str] = mapped_column(
-        sa.String(20), server_default=sa.text("'medium'")
-    )
-    due_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+
+class SentNotification(Base):
+    """A sent notification log entry."""
+
+    __tablename__ = "sent_notifications"
+
+    id: Mapped[str] = mapped_column(sa.String(50), primary_key=True)
+    recipient: Mapped[str] = mapped_column(sa.String(255))
+    message: Mapped[str] = mapped_column(sa.Text)
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), server_default=sa.text("now()")
     )
+
+
+class IdempotencyLedger(Base):
+    """Persisted idempotency ledger for executed steps."""
+
+    __tablename__ = "idempotency_ledger"
+
+    key: Mapped[str] = mapped_column(sa.String(255), primary_key=True)
+    step_id: Mapped[str | None] = mapped_column(sa.String(100), nullable=True)
+    tool_name: Mapped[str | None] = mapped_column(sa.String(100), nullable=True)
+    result: Mapped[dict[str, Any] | None] = mapped_column(
+        sa.JSON().with_variant(postgresql.JSONB, "postgresql"),
+        nullable=True,
+    )
+    status: Mapped[str | None] = mapped_column(sa.String(50), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), server_default=sa.text("now()")
+        sa.DateTime(timezone=True),
+        server_default=sa.text("now()"),
+        onupdate=sa.func.now(),
     )
 
 

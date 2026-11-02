@@ -34,3 +34,5 @@ class AgentState(TypedDict, total=False):
     step_results: dict[str, Any]
     escalated: bool
     executed_keys: dict[str, Any]
+    thread_id: str | None
+    workflow_status: str
