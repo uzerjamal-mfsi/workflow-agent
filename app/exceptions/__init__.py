@@ -4,6 +4,7 @@ from app.exceptions.domain import (
     ForbiddenError,
     InternalError,
     NotFoundError,
+    TransientError,
     UnauthorizedError,
     ValidationError,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "ForbiddenError",
     "InternalError",
     "NotFoundError",
+    "TransientError",
     "UnauthorizedError",
     "ValidationError",
 ]

@@ -68,3 +68,10 @@ class InternalError(AppError):
 
     status_code = 500
     code = "internal_error"
+
+
+class TransientError(AppError):
+    """Temporary or retryable error."""
+
+    status_code = 503
+    code = "transient_error"

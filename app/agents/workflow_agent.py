@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -7,6 +8,7 @@ from typing import Any
 from langgraph.graph import END, START, StateGraph
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 
+from app.exceptions.domain import TransientError
 from app.llms.llm_factory import get_default_chat_client
 from app.prompts.planner_prompt import (
     PLANNER_SYSTEM_PROMPT,
@@ -37,6 +39,42 @@ TARGET_TOOLS = (
     "send_notification",
     "search_workflow_templates",
 )
+
+WRITE_TOOLS = {
+    "create_task",
+    "update_task",
+    "send_notification",
+}
+
+TRANSIENT_EXCEPTIONS = (
+    TransientError,
+    TimeoutError,
+    ConnectionError,
+    ResponseHandlingException,
+)
+
+
+def generate_idempotency_key(
+    step_id: str, tool_name: str, args: dict[str, Any] | None = None
+) -> str:
+    """Generate a deterministic hash key for step tool execution."""
+    sorted_args = json.dumps(args or {}, sort_keys=True, default=str)
+    return hashlib.sha256(f"{step_id}:{tool_name}:{sorted_args}".encode()).hexdigest()
+
+
+def is_transient_error(error: Any) -> bool:
+    """Check if an error represents a retryable transient failure."""
+    if isinstance(error, TRANSIENT_EXCEPTIONS):
+        return True
+    if isinstance(error, Exception):
+        msg = str(error).lower()
+        return "transient" in msg or "timeout" in msg
+    if isinstance(error, dict):
+        if error.get("transient") or error.get("is_transient"):
+            return True
+        err = str(error.get("error", "")).lower()
+        return "transient" in err or "timeout" in err
+    return False
 
 
 def _read_team_directory(team_path: str | Path) -> dict[str, Any]:
@@ -135,6 +173,7 @@ def generate_plan(state: AgentState, llm=None) -> dict[str, Any]:
         "completed_steps": [],
         "failed_steps": [],
         "step_results": {},
+        "executed_keys": {},
     }
 
 
@@ -258,15 +297,15 @@ def execute_next_tool(
         return {"current_step_id": None}
 
     results = dict(state.get("step_results", {}))
+    executed_keys = dict(state.get("executed_keys") or {})
 
     # Skip tool execution if already marked failed during validation
-    if step_id in failed or (
-        step_id in results and results[step_id].get("status") == "failed"
-    ):
+    if step_id in failed:
         return {
             "current_step_id": step_id,
             "pending_steps": pending,
             "step_results": results,
+            "executed_keys": executed_keys,
         }
 
     tool_name = (
@@ -277,8 +316,6 @@ def execute_next_tool(
     )
     tool_args = copy.deepcopy(raw_args) if isinstance(raw_args, dict) else {}
 
-    results = dict(state.get("step_results", {}))
-
     # Resolve task_id if it refers to a previously executed step
     raw_task_id = tool_args.get("task_id")
     if raw_task_id and raw_task_id in results:
@@ -287,6 +324,26 @@ def execute_next_tool(
             resolved_id = prev.get("task_id") or prev.get("task", {}).get("task_id")
             if resolved_id:
                 tool_args["task_id"] = resolved_id
+
+    idempotency_key = None
+    if tool_name in WRITE_TOOLS:
+        if tool_name == "create_task" and not tool_args.get("title"):
+            action = (
+                step.action
+                if isinstance(step, PlanStep)
+                else step.get("action", "")
+            )
+            tool_args["title"] = action or "Untitled Task"
+
+        idempotency_key = generate_idempotency_key(step_id, tool_name, tool_args)
+        if idempotency_key in executed_keys:
+            results[step_id] = executed_keys[idempotency_key]
+            return {
+                "current_step_id": step_id,
+                "pending_steps": pending,
+                "step_results": results,
+                "executed_keys": executed_keys,
+            }
 
     try:
         if tool_name == "create_task":
@@ -376,13 +433,23 @@ def execute_next_tool(
             res = {"status": "skipped", "tool_name": tool_name}
 
     except Exception as err:
-        res = {"status": "failed", "error": str(err)}
+        res = {
+            "status": "failed",
+            "error": str(err),
+            "transient": is_transient_error(err),
+        }
 
     results[step_id] = res
+    if idempotency_key and not (
+        isinstance(res, dict) and (res.get("status") == "failed" or "error" in res)
+    ):
+        executed_keys[idempotency_key] = res
+
     return {
         "current_step_id": step_id,
         "pending_steps": pending,
         "step_results": results,
+        "executed_keys": executed_keys,
     }
 
 
@@ -392,7 +459,7 @@ def verify_step(state: AgentState) -> dict[str, Any]:
     if not step_id:
         return {}
 
-    pending = [s for s in state.get("pending_steps", []) if s != step_id]
+    pending = list(state.get("pending_steps", []))
     completed = list(state.get("completed_steps", []))
     failed = list(state.get("failed_steps", []))
 
@@ -407,22 +474,53 @@ def verify_step(state: AgentState) -> dict[str, Any]:
     ):
         is_failed = True
 
+    step = next(
+        (
+            s
+            for s in state.get("plan", [])
+            if (s.step_id if isinstance(s, PlanStep) else s.get("step_id")) == step_id
+        ),
+        None,
+    )
+
     if is_failed:
+        retry_count = (
+            getattr(step, "retry_count", 0)
+            if isinstance(step, PlanStep)
+            else (step.get("retry_count", 0) if isinstance(step, dict) else 0)
+        )
+        if is_transient_error(result) and retry_count < 2:
+            new_retry = retry_count + 1
+            if isinstance(step, PlanStep):
+                step.retry_count = new_retry
+            elif isinstance(step, dict):
+                step["retry_count"] = new_retry
+            if step_id not in pending:
+                pending.insert(0, step_id)
+            return {
+                "current_step_id": step_id,
+                "pending_steps": pending,
+                "completed_steps": completed,
+                "failed_steps": failed,
+            }
+
+        if step_id in pending:
+            pending.remove(step_id)
         if step_id not in failed:
             failed.append(step_id)
         status = "failed"
     else:
+        if step_id in pending:
+            pending.remove(step_id)
         if step_id not in completed:
             completed.append(step_id)
         status = "completed"
 
-    for step in state.get("plan", []):
-        sid = step.step_id if isinstance(step, PlanStep) else step.get("step_id")
-        if sid == step_id:
-            if isinstance(step, PlanStep):
-                step.status = status
-            elif isinstance(step, dict):
-                step["status"] = status
+    if step:
+        if isinstance(step, PlanStep):
+            step.status = status
+        elif isinstance(step, dict):
+            step["status"] = status
 
     return {
         "pending_steps": pending,
@@ -442,11 +540,17 @@ replan = escalate
 
 
 def route_after_verify(state: AgentState) -> str:
-    """Route to validate_dependencies, escalate, or END based on step outcome."""
+    """Route to validate_dependencies, escalate, execute_next_tool, or END."""
     current_step = state.get("current_step_id")
     failed = state.get("failed_steps", [])
     if (current_step and current_step in failed) or (not current_step and failed):
         return "escalate"
+
+    # Retry active step if transient error occurred and retries remain
+    if current_step and current_step in state.get("pending_steps", []):
+        results = state.get("step_results", {})
+        if is_transient_error(results.get(current_step)):
+            return "execute_next_tool"
 
     pending = state.get("pending_steps", [])
     if pending:
@@ -509,6 +613,7 @@ def create_workflow_graph(
         "verify_step",
         route_after_verify,
         {
+            "execute_next_tool": "execute_next_tool",
             "validate_dependencies": "validate_dependencies",
             "escalate": "escalate",
             END: END,

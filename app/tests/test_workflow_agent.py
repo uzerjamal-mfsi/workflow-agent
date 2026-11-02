@@ -9,12 +9,14 @@ from app.agents.workflow_agent import (
     create_workflow_graph,
     escalate,
     execute_next_tool,
+    generate_idempotency_key,
     generate_plan,
     parse_goal,
     validate_dependencies,
     verify_step,
     workflow_graph,
 )
+from app.exceptions.domain import TransientError
 from app.schemas.workflow import AgentState, ExecutionPlan, PlanStep
 from app.services.jira_service import (
     DEFAULT_TASKS,
@@ -474,3 +476,168 @@ def test_workflow_graph_failure_escalates():
 
     assert result.get("escalated") is True
     assert "step_fail" in result["failed_steps"]
+
+
+def test_transient_failure_retries_and_succeeds():
+    """Verify transient tool failure retries up to 2 times and succeeds."""
+    mock_jira = MagicMock()
+    mock_jira.create_task.side_effect = [
+        TransientError("Temporary timeout"),
+        TimeoutError("Connection timed out"),
+        {"task_id": "TASK-777", "title": "API Review"},
+    ]
+
+    step = PlanStep(
+        step_id="step_retry",
+        action="Create API review task",
+        tool_name="create_task",
+        tool_args={"title": "API Review", "assignee": "dev01"},
+        depends_on=[],
+    )
+    plan = ExecutionPlan(goal="Test retry", steps=[step])
+    mock_llm = MagicMock()
+    mock_llm.with_structured_output.return_value.invoke.return_value = plan
+
+    graph = create_workflow_graph(llm=mock_llm, jira_service_instance=mock_jira)
+    result = graph.invoke({"user_request": "Test retry"})
+
+    assert mock_jira.create_task.call_count == 3
+    assert result["completed_steps"] == ["step_retry"]
+    assert result["failed_steps"] == []
+    assert result["plan"][0].status == "completed"
+    assert result["plan"][0].retry_count == 2
+
+
+def test_transient_failure_exceeds_max_retries_and_escalates():
+    """Verify transient failures reaching max retries mark step as failed and escalate."""
+    mock_jira = MagicMock()
+    mock_jira.create_task.side_effect = [
+        TransientError("Temporary timeout 1"),
+        TransientError("Temporary timeout 2"),
+        TransientError("Temporary timeout 3"),
+    ]
+
+    step = PlanStep(
+        step_id="step_fail_retry",
+        action="Create API review task",
+        tool_name="create_task",
+        tool_args={"title": "API Review", "assignee": "dev01"},
+        depends_on=[],
+    )
+    plan = ExecutionPlan(goal="Test retry max", steps=[step])
+    mock_llm = MagicMock()
+    mock_llm.with_structured_output.return_value.invoke.return_value = plan
+
+    graph = create_workflow_graph(llm=mock_llm, jira_service_instance=mock_jira)
+    result = graph.invoke({"user_request": "Test retry max"})
+
+    assert mock_jira.create_task.call_count == 3
+    assert result.get("escalated") is True
+    assert "step_fail_retry" in result["failed_steps"]
+    assert result["plan"][0].status == "failed"
+    assert result["plan"][0].retry_count == 2
+
+
+def test_non_transient_failure_does_not_retry():
+    """Verify non-transient error fails immediately without retrying."""
+    mock_jira = MagicMock()
+    mock_jira.create_task.side_effect = ValueError("Invalid assignee")
+
+    step = PlanStep(
+        step_id="step_bad_arg",
+        action="Create task",
+        tool_name="create_task",
+        tool_args={"title": "Bad task", "assignee": "dev01"},
+        depends_on=[],
+    )
+    plan = ExecutionPlan(goal="Test permanent failure", steps=[step])
+    mock_llm = MagicMock()
+    mock_llm.with_structured_output.return_value.invoke.return_value = plan
+
+    graph = create_workflow_graph(llm=mock_llm, jira_service_instance=mock_jira)
+    result = graph.invoke({"user_request": "Test permanent failure"})
+
+    assert mock_jira.create_task.call_count == 1
+    assert result.get("escalated") is True
+    assert "step_bad_arg" in result["failed_steps"]
+    assert result["plan"][0].status == "failed"
+    assert result["plan"][0].retry_count == 0
+
+
+def test_idempotency_prevents_duplicate_jira_task(tmp_path: Path):
+    """Verify re-running a step with same idempotency key returns cached Jira task."""
+    temp_tasks = tmp_path / "tasks.json"
+    temp_team = tmp_path / "team_directory.json"
+    shutil.copyfile(DEFAULT_TASKS, temp_tasks)
+    shutil.copyfile(DEFAULT_TEAM, temp_team)
+    jira = JiraService(tasks_path=temp_tasks, team_path=temp_team)
+
+    step = PlanStep(
+        step_id="step_create",
+        action="Create review task",
+        tool_name="create_task",
+        tool_args={"title": "Unique Review Task", "assignee": "dev01"},
+    )
+    state: AgentState = {
+        "plan": [step],
+        "current_step_id": "step_create",
+        "pending_steps": ["step_create"],
+        "completed_steps": [],
+        "failed_steps": [],
+        "step_results": {},
+        "executed_keys": {},
+    }
+
+    res1 = execute_next_tool(state, jira_service_instance=jira)
+    task_id1 = res1["step_results"]["step_create"]["task_id"]
+    assert len(res1["executed_keys"]) == 1
+
+    state["executed_keys"] = res1["executed_keys"]
+    res2 = execute_next_tool(state, jira_service_instance=jira)
+    task_id2 = res2["step_results"]["step_create"]["task_id"]
+
+    assert task_id1 == task_id2
+    matching = [t for t in jira.list_tasks() if t.get("title") == "Unique Review Task"]
+    assert len(matching) == 1
+
+
+def test_idempotency_prevents_duplicate_notification():
+    """Verify re-running a step with same idempotency key returns cached notification result."""
+    mock_notif = MagicMock()
+    mock_notif.send_notification.return_value = {
+        "status": "sent",
+        "recipient": "dev01",
+        "message": "Review ready",
+    }
+
+    step = PlanStep(
+        step_id="step_notify",
+        action="Send notification",
+        tool_name="send_notification",
+        tool_args={"recipient": "dev01", "message": "Review ready"},
+    )
+    state: AgentState = {
+        "plan": [step],
+        "current_step_id": "step_notify",
+        "pending_steps": ["step_notify"],
+        "completed_steps": [],
+        "failed_steps": [],
+        "step_results": {},
+        "executed_keys": {},
+    }
+
+    res1 = execute_next_tool(state, notification_service_instance=mock_notif)
+    assert mock_notif.send_notification.call_count == 1
+    assert len(res1["executed_keys"]) == 1
+
+    state["executed_keys"] = res1["executed_keys"]
+    res2 = execute_next_tool(state, notification_service_instance=mock_notif)
+    assert mock_notif.send_notification.call_count == 1
+    assert res1["step_results"]["step_notify"] == res2["step_results"]["step_notify"]
+
+
+def test_idempotency_key_deterministic_with_differently_ordered_args():
+    """Verify idempotency key produces identical hash regardless of dict key ordering."""
+    key1 = generate_idempotency_key("step_1", "create_task", {"title": "A", "priority": "High"})
+    key2 = generate_idempotency_key("step_1", "create_task", {"priority": "High", "title": "A"})
+    assert key1 == key2

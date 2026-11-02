@@ -18,6 +18,7 @@ def test_plan_step_validation():
     assert step.tool_args == {"query": "agent workflow"}
     assert step.depends_on == []
     assert step.status == "pending"
+    assert step.retry_count == 0
 
 
 def test_plan_step_with_dependencies():
@@ -81,6 +82,7 @@ def test_agent_state_dict():
         "failed_steps": [],
         "current_step_id": "step_1",
         "step_results": {"step_0": {"status": "ok"}},
+        "executed_keys": {"key_1": {"task_id": "TASK-1"}},
     }
     assert state["user_request"] == "Execute task"
     assert len(state["plan"]) == 1
@@ -88,6 +90,7 @@ def test_agent_state_dict():
     assert state["pending_steps"] == ["step_1"]
     assert state["current_step_id"] == "step_1"
     assert state["step_results"] == {"step_0": {"status": "ok"}}
+    assert state["executed_keys"] == {"key_1": {"task_id": "TASK-1"}}
 
     partial_state: AgentState = {"user_request": "Partial task"}
     assert "user_request" in partial_state

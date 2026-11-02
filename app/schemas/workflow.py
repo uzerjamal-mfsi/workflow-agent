@@ -10,6 +10,7 @@ class PlanStep(BaseModel):
     tool_args: dict[str, Any] = Field(default_factory=dict)
     depends_on: list[str] = Field(default_factory=list)
     status: str = "pending"
+    retry_count: int = 0
 
 
 class ExecutionPlan(BaseModel):
@@ -32,3 +33,4 @@ class AgentState(TypedDict, total=False):
     current_step_id: str | None
     step_results: dict[str, Any]
     escalated: bool
+    executed_keys: dict[str, Any]
