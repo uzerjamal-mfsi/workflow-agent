@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from langchain_core.messages import HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
@@ -26,7 +27,7 @@ from app.services.persistence_service import (
     update_workflow_status,
 )
 from app.tools.calendar_tools import check_calendar_availability_tool
-from app.tools.jira_tools import create_task_tool, update_task_tool
+from app.tools.jira_tools import create_task_tool, list_tasks_tool, update_task_tool
 from app.tools.notification_tools import send_notification_tool
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ DEFAULT_TEAM = DATA_DIR / "team_directory.json"
 TOOL_PERMISSIONS = {
     "create_task": "task:create",
     "update_task": "task:update",
+    "list_tasks": "task:read",
     "check_calendar_availability": "calendar:read",
 }
 
@@ -46,6 +48,7 @@ TARGET_TOOLS = (
     "update_task",
     "send_notification",
     "search_workflow_templates",
+    "list_tasks",
 )
 
 WRITE_TOOLS = {
@@ -109,6 +112,8 @@ def _check_step_permission(
         args = {}
 
     user_id = args.get("user_id") or args.get("assignee")
+    if user_id in {"current_user", "system", "me", "user", "self"}:
+        user_id = "dev01"
     req_perm = args.get("required_permission") or TOOL_PERMISSIONS.get(tool)
 
     users = team_data.get("users", [])
@@ -129,10 +134,23 @@ def _check_step_permission(
 def parse_goal(state: AgentState) -> dict[str, Any]:
     """Extract a concise goal string from the user request."""
     goal = state.get("user_request", "").strip()
+    if not goal and state.get("messages"):
+        for m in reversed(state["messages"]):
+            content = getattr(m, "content", None) or (
+                m.get("content") if isinstance(m, dict) else ""
+            )
+            if content:
+                goal = str(content).strip()
+                break
     tid = state.get("thread_id")
     if tid:
         update_workflow_status(tid, status="running", user_request=goal)
-    return {"parsed_goal": goal}
+    res: dict[str, Any] = {"parsed_goal": goal}
+    msgs = state.get("messages") or []
+    last_content = getattr(msgs[-1], "content", "") if msgs else ""
+    if goal and last_content != goal:
+        res["messages"] = [HumanMessage(content=goal)]
+    return res
 
 
 def retrieve_sops(state: AgentState, search_fn=None) -> dict[str, Any]:
@@ -327,15 +345,30 @@ def execute_next_tool(
         step.tool_args if isinstance(step, PlanStep) else step.get("tool_args", {})
     )
     tool_args = copy.deepcopy(raw_args) if isinstance(raw_args, dict) else {}
+    if tool_args.get("user_id") in {"current_user", "system", "me", "user", "self"}:
+        tool_args["user_id"] = "dev01"
+    if tool_args.get("assignee") in {"current_user", "system", "me", "user", "self"}:
+        tool_args["assignee"] = "dev01"
 
     # Resolve task_id if it refers to a previously executed step
     raw_task_id = tool_args.get("task_id")
-    if raw_task_id and raw_task_id in results:
-        prev = results[raw_task_id]
-        if isinstance(prev, dict):
-            resolved_id = prev.get("task_id") or prev.get("task", {}).get("task_id")
-            if resolved_id:
-                tool_args["task_id"] = resolved_id
+    if raw_task_id:
+        if raw_task_id in results:
+            prev = results[raw_task_id]
+            if isinstance(prev, dict):
+                resolved_id = prev.get("task_id") or prev.get("task", {}).get("task_id")
+                if resolved_id:
+                    tool_args["task_id"] = resolved_id
+        elif not str(raw_task_id).startswith("TASK-"):
+            for prev in results.values():
+                if isinstance(prev, dict) and prev.get("task_id"):
+                    tool_args["task_id"] = prev["task_id"]
+                    break
+    elif tool_name == "update_task" and tool_args.get("filter") != "overdue_high_priority":
+        for prev in results.values():
+            if isinstance(prev, dict) and prev.get("task_id"):
+                tool_args["task_id"] = prev["task_id"]
+                break
 
     idempotency_key = None
     if tool_name in WRITE_TOOLS:
@@ -422,6 +455,8 @@ def execute_next_tool(
                 or tool_args.pop("channel", None)
                 or tool_args.pop("to", "")
             )
+            if recipient in {"current_user", "system", "me", "user", "self"}:
+                recipient = "dev01"
             message = tool_args.pop("message", None) or (
                 step.action if isinstance(step, PlanStep) else step.get("action", "")
             )
@@ -449,6 +484,12 @@ def execute_next_tool(
                     res = check_calendar_availability_tool.invoke(
                         {"user_id": user_id, "date": date, **tool_args}
                     )
+
+        elif tool_name == "list_tasks":
+            if jira_service_instance:
+                res = jira_service_instance.list_tasks(**tool_args)
+            else:
+                res = list_tasks_tool.invoke(tool_args)
 
         else:
             logger.info("No-op stub for tool: %s", tool_name)

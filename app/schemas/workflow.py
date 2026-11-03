@@ -1,5 +1,6 @@
-from typing import Any, TypedDict
+from typing import Annotated, Any, TypedDict
 
+from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
 
@@ -23,6 +24,7 @@ class WorkflowRequest(BaseModel):
 
 
 class AgentState(TypedDict, total=False):
+    messages: Annotated[list[Any], add_messages]
     user_request: str
     parsed_goal: str
     retrieved_sops: list[dict[str, Any]]

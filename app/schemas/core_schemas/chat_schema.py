@@ -11,6 +11,9 @@ class ChatRequest(BaseModel):
     thread_id: str = Field(default="default", description="Conversation thread id")
     query: str | None = Field(default=None, description="User query")
     user_request: str | None = Field(default=None, description="Workflow user request")
+    messages: list[dict[str, Any]] | None = Field(
+        default=None, description="Optional conversation messages"
+    )
 
 
 class ChatResponse(BaseModel):
@@ -20,4 +23,10 @@ class ChatResponse(BaseModel):
     answer: str = Field(..., description="Assistant response")
     plan: list[PlanStep] | list[dict[str, Any]] = Field(
         default_factory=list, description="Generated execution plan steps"
+    )
+    history: list[dict[str, Any]] = Field(
+        default_factory=list, description="Conversation message history"
+    )
+    messages: list[dict[str, Any]] = Field(
+        default_factory=list, description="Conversation messages"
     )

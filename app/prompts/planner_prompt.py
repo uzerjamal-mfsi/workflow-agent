@@ -6,6 +6,7 @@ Turn the user's goal into an ordered plan of 4 or more steps using ONLY these to
 - create_task
 - update_task
 - send_notification
+- list_tasks
 
 Rules:
 - Include at least 4 steps.
