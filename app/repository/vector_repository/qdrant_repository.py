@@ -1,100 +1,120 @@
 from hashlib import sha256
+from typing import cast
 from uuid import NAMESPACE_URL, uuid5
 
-from app.config.env_config import get_settings
+from app.config.env_config import Settings, get_settings
 from app.config.qdrant_config import get_qdrant_client
 from langchain_core.documents import Document
+from qdrant_client import QdrantClient
 from qdrant_client.models import (
     Distance,
+    ExtendedPointId,
     FieldCondition,
     Filter,
+    HasIdCondition,
     MatchValue,
+    PayloadSchemaType,
     PointStruct,
     VectorParams,
 )
 
 
-def ensure_collection_exists() -> None:
-    """Ensure that the Qdrant collection exists, if not create it."""
-    settings = get_settings()
-    client = get_qdrant_client()
+class QdrantVectorRepository:
+    """Repository for vector database operations using Qdrant."""
 
-    if not client.collection_exists(settings.QDRANT_COLLECTION):
-        _ = client.create_collection(
-            collection_name=settings.QDRANT_COLLECTION,
-            vectors_config=VectorParams(
-                size=settings.EMBEDDING_DIMENSION,
-                distance=Distance.COSINE,
-            ),
-        )
+    def __init__(
+        self,
+        client: QdrantClient | None = None,
+        settings: Settings | None = None,
+    ) -> None:
+        self.settings: Settings = settings or get_settings()
+        self.client: QdrantClient = client or get_qdrant_client()
 
-
-def upsert_documents(
-    collection_name: str,
-    documents: list[Document],
-    embeddings: list[list[float]],
-    source_id: str
-):
-    """Upsert documents into the Qdrant collection."""
-    ensure_collection_exists()
-
-    if len(documents) != len(embeddings):
-        raise ValueError("Document and embedding counts do not match")
-
-    client = get_qdrant_client()
-    points: list[PointStruct] = []
-
-    for index, (document, embedding) in enumerate(zip(documents, embeddings)):
-        content = document.page_content
-        content_hash = sha256(
-            content.encode("utf-8")
-        ).hexdigest()
-
-        point_id = str(
-            uuid5(
-                NAMESPACE_URL,
-                f"{source_id}:{content_hash}:{index}"
+    def ensure_collection_exists(self, collection_name: str) -> None:
+        """Ensure that the Qdrant collection and payload index exist."""
+        if not self.client.collection_exists(collection_name):
+            _ = self.client.create_collection(
+                collection_name=collection_name,
+                vectors_config=VectorParams(
+                    size=self.settings.EMBEDDING_DIMENSION,
+                    distance=Distance.COSINE,
+                ),
             )
-        )
-
-        points.append(
-            PointStruct(
-                id=point_id,
-                vector=embedding,
-                payload={
-                    "content": content,
-                    "source": document.metadata.get("source"),
-                    "source_id": source_id,
-                    "chunk_index": index,
-                    "content_hash": content_hash
-                }
+            _ = self.client.create_payload_index(
+                collection_name=collection_name,
+                field_name="source_id",
+                field_schema=PayloadSchemaType.KEYWORD,
             )
-        )
-    
-    client.upload_points(
-        collection_name=collection_name,
-        points=points,
-        batch_size=64,
-        wait=True
-    )
 
-def delete_source(
-    collection_name: str,
-    source_id: str,
-) -> None:
-    """Delete all documents associated with a source."""
-    ensure_collection_exists()
+    def upsert_documents(
+        self,
+        collection_name: str,
+        documents: list[Document],
+        embeddings: list[list[float]],
+        source_id: str,
+    ) -> list[str]:
+        """Upsert documents into Qdrant using deterministic IDs, then clean up stale chunks."""
+        self.ensure_collection_exists(collection_name)
 
-    client = get_qdrant_client()
-    _ = client.delete(
-        collection_name = collection_name,
-        points_selector=Filter(
-            must=[
-                FieldCondition(
-                    key="source_id",
-                    match=MatchValue(value=source_id),
+        if len(documents) != len(embeddings):
+            raise ValueError("Document and embedding counts do not match")
+
+        points: list[PointStruct] = []
+        point_ids: list[str] = []
+
+        for index, (document, embedding) in enumerate(zip(documents, embeddings)):
+            content = document.page_content
+            content_hash = sha256(content.encode("utf-8")).hexdigest()
+
+            point_id = str(
+                uuid5(
+                    NAMESPACE_URL,
+                    f"{source_id}:{content_hash}:{index}",
                 )
-            ]
-        ),
-        wait=True,
-    )
+            )
+            point_ids.append(point_id)
+
+            points.append(
+                PointStruct(
+                    id=point_id,
+                    vector=embedding,
+                    payload={
+                        "content": content,
+                        "source": document.metadata.get("source", source_id),
+                        "source_id": source_id,
+                        "header": document.metadata.get("Header 2"),
+                        "chunk_index": index,
+                        "content_hash": content_hash,
+                    },
+                )
+            )
+
+        #Upsert points
+        if points:
+            self.client.upload_points(
+                collection_name=collection_name,
+                points=points,
+                batch_size=64,
+                wait=True,
+            )
+
+            #Clean up any stale chunks for this source_id
+            _ = self.client.delete(
+                collection_name=collection_name,
+                points_selector=Filter(
+                    must=[
+                        FieldCondition(
+                            key="source_id",
+                            match=MatchValue(value=source_id),
+                        )
+                    ],
+                    must_not=[
+                        HasIdCondition(
+                            has_id=cast(list[ExtendedPointId], point_ids)
+                        )
+                    ],
+                ),
+                wait=True,
+            )
+
+        return point_ids

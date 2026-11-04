@@ -1,5 +1,4 @@
 from functools import lru_cache
-from typing import ClassVar
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -7,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Load, Validate and Expose environment settings for the application"""
 
-    model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
+    model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,

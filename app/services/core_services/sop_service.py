@@ -2,8 +2,7 @@ from pathlib import Path
 
 from app.config.env_config import get_settings
 from app.repository.vector_repository.qdrant_repository import (
-    delete_source,
-    upsert_documents,
+    QdrantVectorRepository,
 )
 from app.services.core_services.embedding_service import EmbeddingProvider
 from langchain_community.document_loaders import TextLoader
@@ -13,44 +12,64 @@ from langchain_text_splitters import (
     RecursiveCharacterTextSplitter,
 )
 
-SOP_FILE_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "workflow_sops.md"
+DEFAULT_SOP_PATH = Path("app/data/workflow_sops.md")
 
-def split_markdown(document: list[Document]) -> list[Document]:
-    """Split markdown file into chunks based on header"""
+
+def split_markdown(document: list[Document], source: str) -> list[Document]:
+    """Split markdown file into sections based on headers and attach source."""
     splitter = MarkdownHeaderTextSplitter(
-        headers_to_split_on=[("##", "Header 2")], #sop document only contains this header
-        strip_headers=False
+        headers_to_split_on=[("##", "Header 2")],
+        strip_headers=False,
     )
 
     md_header_splits = splitter.split_text(document[0].page_content)
+    for split in md_header_splits:
+        split.metadata["source"] = source
 
     return md_header_splits
 
-def split_chunks(document: list[Document], embedding_provider: EmbeddingProvider):
-    """Split document into chunks"""
 
+def split_chunks(
+    documents: list[Document], embedding_provider: EmbeddingProvider
+) -> list[Document]:
+    """Split markdown sections into chunks using the embedding tokenizer."""
     splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
         tokenizer=embedding_provider.tokenizer,
         chunk_size=500,
-        chunk_overlap=75
+        chunk_overlap=75,
     )
 
-    return splitter.split_documents(document)
+    return splitter.split_documents(documents)
 
-def ingest_sops():
-    """Load workflow SOPs, split by section, index chunks into Qdrant."""
+
+def ingest_sops(
+    file_path: Path | str = DEFAULT_SOP_PATH,
+    repository: QdrantVectorRepository | None = None,
+    embedding_provider: EmbeddingProvider | None = None,
+) -> int:
+    """Load workflow SOPs, split by section, and index chunks into Qdrant."""
     settings = get_settings()
-    loader = TextLoader(str(SOP_FILE_PATH), encoding="utf-8")
-    embedding_provider = EmbeddingProvider()
+    path = Path(file_path)
+    source_id = path.as_posix()
 
-    document = loader.load()
+    loader = TextLoader(str(path), encoding="utf-8")
+    documents = loader.load()
 
-    markdown = split_markdown(document)
+    provider = embedding_provider or EmbeddingProvider()
+    repo = repository or QdrantVectorRepository()
 
-    chunks = split_chunks(markdown, embedding_provider)
+    markdown = split_markdown(documents, source=source_id)
+    chunks = split_chunks(markdown, provider)
 
-    embeddings = embedding_provider.embed_documents([chunk.page_content for chunk in chunks])
+    embeddings = provider.embed_documents(
+        [chunk.page_content for chunk in chunks]
+    )
 
-    source_id = str(SOP_FILE_PATH.resolve())
-    delete_source(settings.QDRANT_COLLECTION, source_id)
-    upsert_documents(settings.QDRANT_COLLECTION, chunks, embeddings, source_id)
+    repo.upsert_documents(
+        collection_name=settings.QDRANT_COLLECTION,
+        documents=chunks,
+        embeddings=embeddings,
+        source_id=source_id,
+    )
+
+    return len(chunks)
