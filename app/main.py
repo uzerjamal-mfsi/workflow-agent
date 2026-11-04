@@ -1,4 +1,4 @@
-"""Minimal application entry point."""
+"""Application entry point."""
 
 from fastapi import FastAPI
 

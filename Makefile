@@ -17,3 +17,6 @@ docs:
 
 docs-build:
 	@cd website && (test -d node_modules || npm install) && npm run build
+
+ingest-sops:
+	uv run python -m app.scripts.ingest_sops
