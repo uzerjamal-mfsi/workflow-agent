@@ -1,5 +1,11 @@
-"""FastAPI application entry point."""
+"""Minimal application entry point."""
 
-from app.starter import start_application
+from fastapi import FastAPI
 
-app = start_application()
+app = FastAPI()
+
+
+@app.get("/health")
+def health():
+    """Health check endpoint."""
+    return {"status": "ok"}
