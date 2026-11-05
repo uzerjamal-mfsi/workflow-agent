@@ -65,7 +65,7 @@ def ingest_sops(
         [chunk.page_content for chunk in chunks]
     )
 
-    repo.upsert_documents(
+    _ = repo.upsert_documents(
         collection_name=settings.QDRANT_COLLECTION,
         documents=chunks,
         embeddings=embeddings,

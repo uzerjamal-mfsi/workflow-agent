@@ -18,6 +18,7 @@ services:
       - ${WORKING_DIR:-./temp}:/workdir
     depends_on:
       - qdrant
+      - postgres
 
   tests:
     build:
@@ -35,6 +36,29 @@ services:
       - ${WORKING_DIR:-./temp}:/workdir
     depends_on:
       - qdrant
+      - postgres
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=workflow_agent
+    ports:
+      - "5432:5432"
+    volumes:
+      - ${WORKING_DIR:-./temp}/postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d workflow_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   qdrant:
     image: qdrant/qdrant:latest

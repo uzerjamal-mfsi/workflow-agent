@@ -10,6 +10,7 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 *.egg-info/
+typings/
 
 app/static/*
 test_doc.pdf

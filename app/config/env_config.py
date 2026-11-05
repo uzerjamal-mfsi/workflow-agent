@@ -1,4 +1,6 @@
+import re
 from functools import lru_cache
+from typing import ClassVar, Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -6,7 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Load, Validate and Expose environment settings for the application"""
 
-    model_config = SettingsConfigDict(
+    model_config: ClassVar[SettingsConfigDict] = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
@@ -20,8 +22,18 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
     EMBEDDING_DIMENSION: int = 384
 
+    # Postgres settings
+    POSTGRES_URL: str ="postgresql+psycopg://postgres:postgres@localhost:5432/workflow_agent"
+
+    # Persistence mode
+    CHECKPOINTER_TYPE: Literal["memory", "postgres"] = "memory"
+
+    @property
+    def raw_postgres_url(self) -> str:
+        """Strip driver prefixes (e.g. '+psycopg', '+asyncpg') for tools that expect plain 'postgresql://'."""
+        return re.sub(r"^postgresql\+[a-zA-Z0-9_]+://", "postgresql://", self.POSTGRES_URL)
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Get the application settings"""
+    """Get cached application settings"""
     return Settings()
