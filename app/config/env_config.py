@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # Qdrant settings
     QDRANT_URL: str = "http://localhost:6333"
     QDRANT_COLLECTION: str = "workflow-sop"
-    QDRANT_API_KEY: str = ""
+    QDRANT_API_KEY: str | None = None
     EMBEDDING_MODEL: str = "BAAI/bge-small-en-v1.5"
     EMBEDDING_DIMENSION: int = 384
 

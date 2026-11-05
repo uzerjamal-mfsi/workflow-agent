@@ -12,6 +12,6 @@ def get_qdrant_client() -> QdrantClient:
     settings = get_settings()
 
     return QdrantClient(
-        url = settings.QDRANT_URL,
-        api_key=settings.QDRANT_API_KEY
+        url=settings.QDRANT_URL,
+        api_key=settings.QDRANT_API_KEY or None,
     )

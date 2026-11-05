@@ -21,7 +21,6 @@ dependencies = [
     "langchain-openrouter>=0.2.9",
     "langgraph>=1.2.18",
     "langsmith>=0.14.13",
-    "langchain-community>=0.4.2",
     "sentence-transformers>=5.7.0",
     "sqlalchemy[asyncio]>=2.1.6",
     "langgraph-checkpoint-postgres>=3.2.0",

@@ -5,7 +5,6 @@ from app.repository.vector_repository.qdrant_repository import (
     QdrantVectorRepository,
 )
 from app.services.core_services.embedding_service import EmbeddingProvider
-from langchain_community.document_loaders import TextLoader
 from langchain_core.documents import Document
 from langchain_text_splitters import (
     MarkdownHeaderTextSplitter,
@@ -52,8 +51,8 @@ def ingest_sops(
     path = Path(file_path)
     source_id = path.as_posix()
 
-    loader = TextLoader(str(path), encoding="utf-8")
-    documents = loader.load()
+    content = path.read_text(encoding="utf-8")
+    documents = [Document(page_content=content, metadata={"source": str(path)})]
 
     provider = embedding_provider or EmbeddingProvider()
     repo = repository or QdrantVectorRepository()
