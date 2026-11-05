@@ -10,14 +10,15 @@ from fastapi import FastAPI
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from app.agents.checkpointer import close_checkpointer
+from app.agents.checkpointer import close_checkpointer, init_checkpointer
 from app.config.postgres_config import engine
 from app.routes.core_routes.chat_route import router as chat_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """"Application lifespan context."""
+    """Application lifespan context."""
+    await init_checkpointer()
     yield
     # Shutdown: clean up SQLAlchemy engine & checkpointer connections
     await close_checkpointer()

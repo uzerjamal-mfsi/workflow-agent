@@ -5,10 +5,11 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from app.agents.checkpointer import get_checkpointer
-from app.agents.workflow_agent import create_workflow_graph
+from app.agents.workflow_agent import get_workflow_graph
 from app.schemas.core_schemas.chat_schemas import ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/api/v1")
+
 
 @router.post("/chat")
 async def chat_endpoint(
@@ -16,7 +17,7 @@ async def chat_endpoint(
     checkpointer: Annotated[BaseCheckpointSaver[Any], Depends(get_checkpointer)]
 ) -> ChatResponse:
     """Run goal through workflow, saving state to checkpointer under thread_id."""
-    graph = create_workflow_graph(checkpointer)
+    graph = get_workflow_graph(checkpointer)
 
     config: RunnableConfig = {
         "configurable": {

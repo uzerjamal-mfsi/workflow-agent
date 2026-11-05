@@ -2,6 +2,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, description="Raw Message/Input")
     thread_id: str = Field(

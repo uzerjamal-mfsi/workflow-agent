@@ -1,14 +1,15 @@
 from collections.abc import AsyncIterable
 
-from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+from sqlalchemy.orm import DeclarativeBase
 
 from app.config.env_config import get_settings
+
 
 class Base(DeclarativeBase):
     """Base class for all database models"""
