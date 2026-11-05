@@ -1,4 +1,4 @@
-.PHONY: setup install-dev install-hooks lock docs docs-build
+.PHONY: setup install-dev install-hooks lock docs docs-build ingest-sops seed-db
 
 setup: install-dev install-hooks
 	@echo "Developer environment is ready."
@@ -20,3 +20,6 @@ docs-build:
 
 ingest-sops:
 	uv run python -m app.scripts.ingest_sops
+
+seed-db:
+	uv run python -m app.scripts.seed_mock_db
