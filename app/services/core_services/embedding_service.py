@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import cast
 
 from app.config.embedding_config import get_embedding_model
@@ -34,3 +35,7 @@ class EmbeddingProvider:
         )
 
         return cast(list[float], embeddings.tolist())
+
+@lru_cache()
+def get_embedding_provider() -> EmbeddingProvider:
+    return EmbeddingProvider()

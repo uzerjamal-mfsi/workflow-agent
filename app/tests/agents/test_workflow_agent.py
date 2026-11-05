@@ -14,6 +14,8 @@ async def test_workflow_graph_execution():
         config={"configurable": {"thread_id": "t1"}},
     )
     assert result["parsed_goal"] == "Generate report"
+    assert "retrieved_sops" in result
+    assert isinstance(result["retrieved_sops"], list)
 
 
 def test_get_workflow_graph_caching():

@@ -1,5 +1,6 @@
+from functools import lru_cache
 from hashlib import sha256
-from typing import cast
+from typing import Any, cast
 from uuid import NAMESPACE_URL, uuid5
 
 from app.config.env_config import Settings, get_settings
@@ -118,3 +119,44 @@ class QdrantVectorRepository:
             )
 
         return point_ids
+
+    def search_documents(
+        self,
+        collection_name: str,
+        query_vectors: list[float],
+        limit: int = 3,
+        filter: Filter | None = None
+    ) -> list[dict[str, Any]]:
+        """Search similar document chunks in Qdrant given a query embedding."""
+        try:
+            if not self.client.collection_exists(collection_name):
+                return []
+
+            search_result = self.client.query_points(
+                collection_name=collection_name,
+                query=query_vectors,
+                limit=limit,
+                query_filter=filter,
+            )
+
+            results: list[dict[str, Any]] = []
+            for point in search_result.points:
+                payload = point.payload or {}
+                results.append(
+                    {
+                        "id": str(point.id),
+                        "score": point.score,
+                        "content": payload.get("content", ""),
+                        "header": payload.get("header"),
+                        "source": payload.get("source")
+                    }
+                )
+
+            return results
+        except Exception as e:
+            print(e)
+            return []
+
+@lru_cache()
+def get_qdrant_repository() -> QdrantVectorRepository:
+    return QdrantVectorRepository()

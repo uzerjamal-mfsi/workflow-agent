@@ -73,3 +73,22 @@ def ingest_sops(
     )
 
     return len(chunks)
+
+def search_sops(
+    repository: QdrantVectorRepository,
+    embedding_provider: EmbeddingProvider,
+    collection_name: str,
+    query: str,
+    limit: int = 3,
+) -> list[str]:
+    """Retrieve top-k relevant SOP sections using vector similarity search."""
+    
+    query_vector = embedding_provider.embed_query(query)
+
+    results = repository.search_documents(
+        collection_name=collection_name,
+        query_vectors=query_vector,
+        limit=limit,
+    )
+
+    return [item["content"] for item in results if item.get("content")]

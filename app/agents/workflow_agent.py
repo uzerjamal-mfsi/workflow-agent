@@ -5,6 +5,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from app.agents.nodes.parse_goal import parse_goal
+from app.agents.nodes.retrieve_sops import retrieve_sops
 from app.schemas.state import WorkflowState
 
 _compiled_graph: CompiledStateGraph[WorkflowState, Any, Any, Any] | None = None
@@ -16,9 +17,11 @@ def create_workflow_graph(
     """Create the langgraph for the workflow"""
     workflow = StateGraph(WorkflowState)
     workflow.add_node("parse_goal", parse_goal)
+    workflow.add_node("retrieve_sops", retrieve_sops)
 
     workflow.add_edge(START, "parse_goal")
-    workflow.add_edge("parse_goal", END)
+    workflow.add_edge("parse_goal", "retrieve_sops")
+    workflow.add_edge("retrieve_sops", END)
 
     return workflow.compile(checkpointer=checkpointer)
 

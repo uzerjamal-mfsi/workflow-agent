@@ -8,4 +8,5 @@ class WorkflowState(TypedDict, total=False):
     user_request: str
     parsed_goal: str
     thread_id: str
+    retrieved_sops: list[str]
     
