@@ -22,7 +22,7 @@ def test_create_task_args_defaults():
 
 def test_create_task_args_invalid_priority():
     with pytest.raises(ValidationError):
-        CreateTaskArgs(title="Task", assignee="dev01", priority="Medium")
+        CreateTaskArgs(title="Task", assignee="dev01", priority="Invalid")  # pyright: ignore[reportArgumentType]
 
 
 def test_tool_args_instantiation():
