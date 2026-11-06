@@ -3,6 +3,8 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.types import Command
+from pydantic import BaseModel
 
 from app.agents.checkpointer import get_checkpointer
 from app.agents.workflow_agent import get_workflow_graph
@@ -10,6 +12,10 @@ from app.schemas.core_schemas.chat_schemas import ChatRequest, ChatResponse
 
 router = APIRouter(prefix="/api/v1")
 
+class ApprovalRequest(BaseModel):
+    thread_id: str
+    approved: bool
+    feedback: str | None = None
 
 @router.post("/chat")
 async def chat_endpoint(
@@ -38,3 +44,17 @@ async def chat_endpoint(
         thread_id=request.thread_id,
         answer="Test"
     )
+
+@router.post("/chat/approve")
+async def approve_endpoint(
+    request: ApprovalRequest,
+    checkpointer: Annotated[BaseCheckpointSaver[Any], Depends(get_checkpointer)]
+):
+    graph = get_workflow_graph(checkpointer)
+    config: RunnableConfig = {"configurable": {"thread_id": request.thread_id}}
+    
+    await graph.ainvoke(
+        Command(resume={"approved": request.approved, "feedback": request.feedback}),
+        config=config,
+    )
+    return {"status": "resumed", "thread_id": request.thread_id}

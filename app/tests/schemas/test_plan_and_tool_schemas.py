@@ -10,7 +10,7 @@ from app.schemas.core_schemas.tool_schemas import (
     SendNotificationArgs,
     UpdateTaskArgs,
 )
-from app.schemas.state import Plan, Step
+from app.schemas.state import ApprovalDecision, Plan, Step
 
 
 def test_create_task_args_defaults():
@@ -77,3 +77,20 @@ def test_plan_instantiation():
     assert plan.reasoning == "Alert operations on failure"
     assert len(plan.steps) == 1
     assert plan.steps[0].requires_approval is True
+
+
+def test_approval_decision_schema_defaults():
+    decision = ApprovalDecision(approved=True)
+    assert decision.approved is True
+    assert decision.feedback is None
+
+
+def test_approval_decision_schema_with_feedback():
+    decision = ApprovalDecision(approved=False, feedback="Action rejected by admin")
+    assert decision.approved is False
+    assert decision.feedback == "Action rejected by admin"
+
+
+def test_approval_decision_schema_missing_approved():
+    with pytest.raises(ValidationError):
+        ApprovalDecision.model_validate({})

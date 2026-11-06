@@ -52,3 +52,9 @@ class WorkflowState(TypedDict, total=False):
     current_step_index: int
     completed_steps: list[dict[str, Any]]
     failed_steps: list[dict[str, Any]]
+    approved: bool | None
+    feedback: str | None
+
+class ApprovalDecision(BaseModel):
+    approved: bool
+    feedback: str | None = None
