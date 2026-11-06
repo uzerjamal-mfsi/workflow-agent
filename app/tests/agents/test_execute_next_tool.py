@@ -11,7 +11,7 @@ from app.schemas.core_schemas.tool_schemas import (
     SendNotificationArgs,
     UpdateTaskArgs,
 )
-from app.schemas.state import Plan, Step, WorkflowState
+from app.schemas.state import Plan, Step, StepResult, WorkflowState
 
 
 @pytest.mark.asyncio
@@ -78,13 +78,12 @@ async def test_execute_next_tool_success():
         result = await execute_next_tool(state)
 
         assert result == {
-            "last_step_result": {
-                "step_id": "step_1",
-                "tool": "create_task",
-                "success": True,
-                "output": expected_output,
-                "error": None,
-            }
+            "last_step_result": StepResult(
+                step_id="step_1",
+                tool="create_task",
+                success=True,
+                output=expected_output,
+            )
         }
         mock_run.assert_awaited_once_with(step, "thread-123", mock_session)
 
@@ -118,13 +117,99 @@ async def test_execute_next_tool_exception():
         result = await execute_next_tool(state)
 
         assert result == {
-            "last_step_result": {
-                "step_id": "step_1",
-                "tool": "create_task",
-                "success": False,
-                "output": None,
-                "error": "Service unavailable",
-            }
+            "last_step_result": StepResult(
+                step_id="step_1",
+                tool="create_task",
+                success=False,
+                error="Service unavailable",
+                error_type="fatal",
+            )
+        }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error_cls,error_msg",
+    [
+        (TimeoutError, "Request timed out"),
+        (ConnectionError, "Connection refused"),
+        (OSError, "Network unreachable"),
+    ],
+)
+async def test_execute_next_tool_transient_error(error_cls, error_msg):
+    step = Step(
+        step_id="step_1",
+        title="Create Task",
+        tool="create_task",
+        args=CreateTaskArgs(title="Task 1", assignee="dev01"),
+    )
+    plan = Plan(reasoning="Test", steps=[step])
+    state: WorkflowState = {"plan": plan, "current_step_index": 0}
+
+    mock_session = AsyncMock(spec=AsyncSession)
+    mock_session_ctx = MagicMock()
+    mock_session_ctx.__aenter__.return_value = mock_session
+    mock_session_ctx.__aexit__.return_value = None
+
+    with (
+        patch(
+            "app.agents.nodes.execute_new_tool.async_session_factory",
+            return_value=mock_session_ctx,
+        ),
+        patch(
+            "app.agents.nodes.execute_new_tool._run_tool",
+            side_effect=error_cls(error_msg),
+        ),
+    ):
+        result = await execute_next_tool(state)
+
+        assert result == {
+            "last_step_result": StepResult(
+                step_id="step_1",
+                tool="create_task",
+                success=False,
+                error=error_msg,
+                error_type="transient",
+            )
+        }
+
+
+@pytest.mark.asyncio
+async def test_execute_next_tool_logical_error():
+    step = Step(
+        step_id="step_1",
+        title="Create Task",
+        tool="create_task",
+        args=CreateTaskArgs(title="Task 1", assignee="dev01"),
+    )
+    plan = Plan(reasoning="Test", steps=[step])
+    state: WorkflowState = {"plan": plan, "current_step_index": 0}
+
+    mock_session = AsyncMock(spec=AsyncSession)
+    mock_session_ctx = MagicMock()
+    mock_session_ctx.__aenter__.return_value = mock_session
+    mock_session_ctx.__aexit__.return_value = None
+
+    with (
+        patch(
+            "app.agents.nodes.execute_new_tool.async_session_factory",
+            return_value=mock_session_ctx,
+        ),
+        patch(
+            "app.agents.nodes.execute_new_tool._run_tool",
+            side_effect=ValueError("Invalid field value"),
+        ),
+    ):
+        result = await execute_next_tool(state)
+
+        assert result == {
+            "last_step_result": StepResult(
+                step_id="step_1",
+                tool="create_task",
+                success=False,
+                error="Invalid field value",
+                error_type="logical",
+            )
         }
 
 

@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.env_config import get_settings
 from app.config.postgres_config import async_session_factory
 from app.repository.vector_repository.qdrant_repository import get_qdrant_repository
-from app.schemas.state import Plan, Step, WorkflowState
+from app.schemas.state import Plan, Step, StepResult, WorkflowState
 from app.services.core_services.embedding_service import get_embedding_provider
 from app.services.core_services.sop_service import search_sops
 from app.services.mock_services import CalendarService, NotificationService, TaskService
@@ -67,21 +67,43 @@ async def execute_next_tool(state: WorkflowState):
         async with async_session_factory() as session:
             output = await _run_tool(step, thread_id, session)
         return {
-            "last_step_result": {
-                "step_id": step.step_id,
-                "tool": step.tool,
-                "success": True,
-                "output": output,
-                "error": None,
-            }
+            "last_step_result": StepResult(
+                step_id=step.step_id,
+                tool=step.tool,
+                success=True,
+                output=output,
+            )
+        }
+    except (TimeoutError, ConnectionError, OSError) as e:
+    # Infrastructure / network glitch
+        return {
+            "last_step_result": StepResult(
+                step_id=step.step_id,
+                tool=step.tool,
+                success=False,
+                error=str(e),
+                error_type="transient",
+            )
+        }
+    except ValueError as e:
+        # Business logic error
+        return {
+            "last_step_result": StepResult(
+                step_id=step.step_id,
+                tool=step.tool,
+                success=False,
+                error=str(e),
+                error_type="logical",
+            )
         }
     except Exception as e:
+        # Unknown fatal crash
         return {
-            "last_step_result": {
-                "step_id": step.step_id,
-                "tool": step.tool,
-                "success": False,
-                "output": None,
-                "error": str(e),
-            }
+            "last_step_result": StepResult(
+                step_id=step.step_id,
+                tool=step.tool,
+                success=False,
+                error=str(e),
+                error_type="fatal",
+            )
         }

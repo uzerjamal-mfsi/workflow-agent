@@ -5,6 +5,14 @@ from pydantic import BaseModel, Field
 
 from app.schemas.core_schemas.tool_schemas import CheckCalendarArgs, CreateTaskArgs, SearchTemplatesArgs, SendNotificationArgs, UpdateTaskArgs
 
+class StepResult(BaseModel):
+    step_id: str
+    tool: str
+    success: bool
+    output: Any = None
+    error: str | None = None
+    error_type: Literal["transient", "logical", "fatal"] | None = None
+
 class Step(BaseModel):
     step_id: str = Field(
         description="Unique identifier for the step, e.g. 'step_1', 'step_2'"
@@ -50,11 +58,13 @@ class WorkflowState(TypedDict, total=False):
     validation_errors: list[str]
     requires_approval: bool
     current_step_index: int
-    completed_steps: list[dict[str, Any]]
-    failed_steps: list[dict[str, Any]]
+    completed_steps: list[StepResult]
+    failed_steps: list[StepResult]
     approved: bool | None
     feedback: str | None
-    last_step_result: dict[str, Any] | None
+    last_step_result: StepResult | None
+    retry_count: int
+    verification_outcome: Literal["next_step", "retry", "replan", "completed", "escalate"] | None
 
 class ApprovalDecision(BaseModel):
     approved: bool

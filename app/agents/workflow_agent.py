@@ -10,6 +10,7 @@ from app.agents.nodes.generate_structured_plan import generate_structured_plan
 from app.agents.nodes.parse_goal import parse_goal
 from app.agents.nodes.retrieve_sops import retrieve_sops
 from app.agents.nodes.validate_dependencies_and_permissions import validate_dependencies_and_permission
+from app.agents.nodes.verify import verify
 from app.schemas.state import WorkflowState
 
 _compiled_graph: CompiledStateGraph[WorkflowState, Any, Any, Any] | None = None
@@ -19,6 +20,17 @@ def route_after_approval(state: WorkflowState) -> str:
     if state.get("approved", False):
         return "execute_next_tool"
     return END
+
+def route_after_verification(state: WorkflowState) -> str:
+    """Decides whether to execute next step, retry, replan, or end."""
+    outcome = state.get("verification_outcome")
+    match outcome:
+        case "next_step" | "retry":
+            return "execute_next_tool"
+        case "replan":
+            return "generate_structured_plan"
+        case _:
+            return END
 
 def create_workflow_graph(
     checkpointer: BaseCheckpointSaver[Any],
@@ -31,6 +43,7 @@ def create_workflow_graph(
     workflow.add_node("validate_dependencies_and_permissions", validate_dependencies_and_permission)
     workflow.add_node("approval_gate", approval_gate)
     workflow.add_node("execute_next_tool", execute_next_tool)
+    workflow.add_node("verify", verify)
 
     # --- Edges ---
     workflow.add_edge(START, "parse_goal")
@@ -41,9 +54,22 @@ def create_workflow_graph(
     workflow.add_conditional_edges(
         "approval_gate",
         route_after_approval,
-        {"execute_next_tool": "execute_next_tool", END: END},
+        {
+            "execute_next_tool": "execute_next_tool",
+            "generate_structured_plan": "generate_structured_plan",
+            END: END,
+        },
     )
-    workflow.add_edge("execute_next_tool", END)
+    workflow.add_edge("execute_next_tool", "verify")
+    workflow.add_conditional_edges(
+        "verify",
+        route_after_verification,
+        {
+            "execute_next_tool": "execute_next_tool",
+            "generate_structured_plan": "generate_structured_plan",
+            END: END,
+        },
+    )
 
     return workflow.compile(checkpointer=checkpointer)
 

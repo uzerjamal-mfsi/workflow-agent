@@ -10,7 +10,7 @@ from app.schemas.core_schemas.tool_schemas import (
     SendNotificationArgs,
     UpdateTaskArgs,
 )
-from app.schemas.state import ApprovalDecision, Plan, Step, WorkflowState
+from app.schemas.state import ApprovalDecision, Plan, Step, StepResult, WorkflowState
 
 
 def test_create_task_args_defaults():
@@ -96,18 +96,54 @@ def test_approval_decision_schema_missing_approved():
         ApprovalDecision.model_validate({})
 
 
+def test_step_result_defaults():
+    res = StepResult(step_id="step_1", tool="create_task", success=True)
+    assert res.step_id == "step_1"
+    assert res.tool == "create_task"
+    assert res.success is True
+    assert res.output is None
+    assert res.error is None
+    assert res.error_type is None
+
+
+@pytest.mark.parametrize("error_type", ["transient", "logical", "fatal"])
+def test_step_result_valid_error_types(error_type):
+    res = StepResult(
+        step_id="step_1",
+        tool="create_task",
+        success=False,
+        error="Failure occurred",
+        error_type=error_type,
+    )
+    assert res.error_type == error_type
+
+
+def test_step_result_invalid_error_type():
+    with pytest.raises(ValidationError):
+        StepResult(
+            step_id="step_1",
+            tool="create_task",
+            success=False,
+            error_type=cast(Any, "unknown_type"),
+        )
+
+
 def test_workflow_state_last_step_result_field():
+    result = StepResult(
+        step_id="step_1",
+        tool="create_task",
+        success=True,
+        output={"task_id": "TASK-101"},
+    )
     state: WorkflowState = {
-        "last_step_result": {
-            "step_id": "step_1",
-            "tool": "create_task",
-            "success": True,
-            "output": {"task_id": "TASK-101"},
-            "error": None,
-        }
+        "last_step_result": result,
+        "completed_steps": [result],
+        "retry_count": 0,
+        "verification_outcome": "completed",
     }
     last_step_result = state["last_step_result"]
     assert last_step_result is not None
-    assert last_step_result["success"] is True
-    assert last_step_result["tool"] == "create_task"
+    assert last_step_result.success is True
+    assert last_step_result.tool == "create_task"
+    assert state["verification_outcome"] == "completed"
 
