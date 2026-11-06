@@ -10,7 +10,7 @@ from app.schemas.core_schemas.tool_schemas import (
     SendNotificationArgs,
     UpdateTaskArgs,
 )
-from app.schemas.state import ApprovalDecision, Plan, Step
+from app.schemas.state import ApprovalDecision, Plan, Step, WorkflowState
 
 
 def test_create_task_args_defaults():
@@ -94,3 +94,20 @@ def test_approval_decision_schema_with_feedback():
 def test_approval_decision_schema_missing_approved():
     with pytest.raises(ValidationError):
         ApprovalDecision.model_validate({})
+
+
+def test_workflow_state_last_step_result_field():
+    state: WorkflowState = {
+        "last_step_result": {
+            "step_id": "step_1",
+            "tool": "create_task",
+            "success": True,
+            "output": {"task_id": "TASK-101"},
+            "error": None,
+        }
+    }
+    last_step_result = state["last_step_result"]
+    assert last_step_result is not None
+    assert last_step_result["success"] is True
+    assert last_step_result["tool"] == "create_task"
+

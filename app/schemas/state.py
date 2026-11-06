@@ -45,7 +45,7 @@ class WorkflowState(TypedDict, total=False):
     parsed_goal: str
     thread_id: str
     retrieved_sops: list[str]
-    plan: Plan
+    plan: Plan | None
     is_plan_valid: bool
     validation_errors: list[str]
     requires_approval: bool
@@ -54,6 +54,7 @@ class WorkflowState(TypedDict, total=False):
     failed_steps: list[dict[str, Any]]
     approved: bool | None
     feedback: str | None
+    last_step_result: dict[str, Any] | None
 
 class ApprovalDecision(BaseModel):
     approved: bool
