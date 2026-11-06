@@ -4,6 +4,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from app.agents.nodes.approval_gate import approval_gate
 from app.agents.nodes.generate_structured_plan import generate_structured_plan
 from app.agents.nodes.parse_goal import parse_goal
 from app.agents.nodes.retrieve_sops import retrieve_sops
@@ -22,12 +23,14 @@ def create_workflow_graph(
     workflow.add_node("retrieve_sops", retrieve_sops)
     workflow.add_node("generate_structured_plan", generate_structured_plan)
     workflow.add_node("validate_dependencies_and_permissions", validate_dependencies_and_permission)
+    workflow.add_node("approval_gate", approval_gate)
 
     workflow.add_edge(START, "parse_goal")
     workflow.add_edge("parse_goal", "retrieve_sops")
     workflow.add_edge("retrieve_sops", "generate_structured_plan")
     workflow.add_edge("generate_structured_plan", "validate_dependencies_and_permissions")
-    workflow.add_edge("validate_dependencies_and_permissions", END)
+    workflow.add_edge("validate_dependencies_and_permissions", "approval_gate")
+    workflow.add_edge("approval_gate", END)
 
     return workflow.compile(checkpointer=checkpointer)
 
