@@ -2,6 +2,7 @@ import re
 from functools import lru_cache
 from typing import ClassVar, Literal
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -28,6 +29,10 @@ class Settings(BaseSettings):
     # Persistence mode
     CHECKPOINTER_TYPE: Literal["memory", "postgres"] = "memory"
 
+    # LLM
+    OPENROUTER_API_KEY: SecretStr
+    MODEL_NAME: str
+
     @property
     def raw_postgres_url(self) -> str:
         """Strip driver prefixes (e.g. '+psycopg', '+asyncpg') for tools that expect plain 'postgresql://'."""
@@ -36,4 +41,4 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     """Get cached application settings"""
-    return Settings()
+    return Settings()  # pyright: ignore[reportCallIssue]

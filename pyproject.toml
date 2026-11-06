@@ -75,3 +75,4 @@ exclude = ["temp*"]
 reportUnknownMemberType = false
 reportAny = false
 reportUnusedCallResult = false
+reportExplicitAny = false
