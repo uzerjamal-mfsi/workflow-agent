@@ -46,4 +46,9 @@ class WorkflowState(TypedDict, total=False):
     thread_id: str
     retrieved_sops: list[str]
     plan: Plan
-    
+    is_plan_valid: bool
+    validation_errors: list[str]
+    requires_approval: bool
+    current_step_index: int
+    completed_steps: list[dict[str, Any]]
+    failed_steps: list[dict[str, Any]]
