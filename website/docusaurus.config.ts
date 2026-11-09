@@ -1,24 +1,23 @@
-import {themes as prismThemes} from 'prism-react-renderer';
-import type {Config} from '@docusaurus/types';
+import { themes as prismThemes } from 'prism-react-renderer';
+import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
-const githubRepo = 'https://github.com/thiga-mindfire/agentic_web_starter';
+const githubRepo = 'https://github.com/thiga-mindfire/workflow-agent';
 
 const config: Config = {
-  title: 'Agentic Web Starter',
-  tagline: 'FastAPI agentic RAG backend — project documentation',
+  title: 'Workflow Agent',
+  tagline: 'Autonomous workflow automation agent with LangGraph, SOP retrieval, and Human-in-the-Loop approval',
   favicon: 'img/favicon.ico',
 
   future: {
     v4: true,
   },
 
-  // For GitHub Pages (project site), set url/baseUrl e.g. https://<user>.github.io and /agentic_web_starter/
   url: 'https://thiga-mindfire.github.io',
   baseUrl: '/',
 
   organizationName: 'thiga-mindfire',
-  projectName: 'agentic_web_starter',
+  projectName: 'workflow-agent',
 
   onBrokenLinks: 'warn',
 
@@ -50,9 +49,9 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'Agentic Web Starter',
+      title: 'Workflow Agent',
       logo: {
-        alt: 'Agentic Web Starter',
+        alt: 'Workflow Agent',
         src: 'img/logo.svg',
       },
       items: [
@@ -80,8 +79,16 @@ const config: Config = {
               to: '/docs/intro',
             },
             {
-              label: 'Repository README',
-              href: `${githubRepo}/blob/main/README.md`,
+              label: 'Getting Started',
+              to: '/docs/getting-started',
+            },
+            {
+              label: 'Architecture',
+              to: '/docs/architecture',
+            },
+            {
+              label: 'API Reference',
+              to: '/docs/api-reference',
             },
           ],
         },
@@ -92,14 +99,10 @@ const config: Config = {
               label: 'GitHub',
               href: githubRepo,
             },
-            {
-              label: 'Issues',
-              href: `${githubRepo}/issues`,
-            },
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Agentic Web Starter contributors. Built with Docusaurus.`,
+      copyright: `Copyright © ${new Date().getFullYear()} Workflow Agent. Built with Docusaurus.`,
     },
     prism: {
       theme: prismThemes.github,

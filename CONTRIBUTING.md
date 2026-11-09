@@ -1,144 +1,71 @@
-# Contributing to Agentic Web Starter
+# Contributing to Workflow Agent
 
-We welcome and appreciate your contributions. These guidelines exist to keep collaboration smooth, the codebase secure, and every change reviewable by the team.
-
----
-
-## How Can You Contribute?
-
-- Reporting bugs or issues
-- Submitting feature requests
-- Writing or improving documentation
-- Fixing bugs
-- Implementing new features
+Contributions to Workflow Agent are welcome! Follow these guidelines to keep collaboration smooth and effective.
 
 ---
 
-## Contribution Workflow
+## Quick Setup
 
-1. **Fork** the repository to your GitHub account.
-2. **Clone** your fork locally.
-3. **Install dev tooling** (once per clone) so hooks and lint commands match CI:
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/thiga-mindfire/workflow-agent.git
+   cd workflow-agent
+   ```
+
+2. **Configure environment:**
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **Install dependencies and hooks:**
    ```bash
    make setup
+   # or manually:
+   # uv sync --extra dev
+   # uv run pre-commit install
    ```
-   This creates `.venv`, installs dev dependencies, and installs pre-commit and pre-push hooks.
-   You **must** do this before your first commit — otherwise the pre-commit hook will fail with
-   `` `pre-commit` not found ``.
-
-   **Manual alternative (if you do not use `make`):**
-   ```bash
-   uv sync --extra dev
-   uv run pre-commit install
-   ```
-   Verify hooks on the whole tree once: `uv run pre-commit run --all-files`
-
-4. Create a new **branch** following the naming convention:
-   ```
-   git checkout -b feature/<short-description>
-   ```
-   See [Branch Naming](#branch-naming) below for all allowed prefixes.
-5. **Make your changes** and ensure they follow the [code rules](#code-rules).
-6. **Run quality checks** before committing (same commands as CI):
-   ```bash
-   uv run ruff check --fix app/ && uv run ruff format app/
-   ```
-   mypy is enforced in CI: `uv run mypy app/`.
-7. **Run the test suite** and make sure everything passes:
-   ```bash
-   uv run pytest app/tests/ -v
-   # or via Docker:
-   docker compose run tests
-   ```
-8. **Commit** using [Conventional Commits](https://www.conventionalcommits.org/) format:
-   ```
-   feat(agents): add timeout handling to supervisor agent
-   fix(repository): handle empty result set in base_repository
-   ```
-9. **Push** your branch and open a **Pull Request** against `main`.
-10. Fill in the **PR description template** from [`docs/pull-request-guidelines.md`](./docs/pull-request-guidelines.md#7-pr-description--checklist) completely — PRs with empty descriptions will not be reviewed.
 
 ---
 
-## Branch Naming
+## Branch Naming & Commits
 
-| Type | Pattern | Example |
-|------|---------|---------|
-| Feature | `feature/<short-description>` | `feature/add-redis-history-ttl` |
-| Bug fix | `fix/<short-description>` | `fix/qdrant-collection-init-error` |
-| Refactor | `refactor/<short-description>` | `refactor/llm-factory-fallback-logic` |
-| Docs | `docs/<short-description>` | `docs/update-jwt-auth-flow` |
-| Tests | `test/<short-description>` | `test/ingestion-service-coverage` |
-| Chore | `chore/<short-description>` | `chore/bump-langchain-version` |
-| Hotfix | `hotfix/<short-description>` | `hotfix/supervisor-agent-crash` |
+- **Branch Naming**:
+  - `feat/<description>` — New features
+  - `fix/<description>` — Bug fixes
+  - `docs/<description>` — Documentation changes
+  - `refactor/<description>` — Refactoring
+  - `test/<description>` — Tests
 
-**Never push directly to `main`.**
-
----
-
-## Code Rules
-
-A summary of the most important rules. See the full reference in [`docs/pull-request-guidelines.md`](./docs/pull-request-guidelines.md).
-
-- **Service layer** — all business logic goes in `app/services/`, not in route handlers
-- **Repository pattern** — all database access goes through `app/repository/`
-- **No hardcoded values** — use the `settings` singleton from `app/config/env_config.py`
-- **Custom exceptions only** — raise from `app/exceptions/domain.py`, never raw `Exception`
-- **Structured logging** — use the JSON logger, never `print()`
-- **Docstrings** — all public classes and methods require Google-style docstrings
-- **No secrets committed** — `.env` is gitignored; add new vars to `.env.example` instead
-- **Tests required** — all new business logic must have tests covering happy path and failure cases
+- **Commit Standards**:
+  Follow [Conventional Commits](https://www.conventionalcommits.org/):
+  ```
+  feat(agents): add fallback routing in verification node
+  fix(routes): validate approval request payload
+  docs(readme): add workflow flow diagram
+  ```
 
 ---
 
-## Pull Request Requirements
+## Quality Checks & Testing
 
-Every PR must:
+Always verify before committing:
 
-- Address **exactly one concern** (no mixing features and refactors)
-- Have a **filled-out PR description** using the template in [`docs/pull-request-guidelines.md`](./docs/pull-request-guidelines.md#7-pr-description--checklist)
-- Pass **all CI checks** on GitHub Actions (Ruff, mypy, pytest, gitleaks, pip-audit — see [`.github/workflows/ci.yml`](./.github/workflows/ci.yml); install locally with `uv sync --extra dev`)
-- Have **at least 1 approving review** (2 for security/auth changes)
-- Have **all reviewer comments resolved** before merge
+```bash
+# Lint and format
+uv run ruff check app/
+uv run ruff format app/
 
-PRs that violate the rules in [`docs/pull-request-guidelines.md`](./docs/pull-request-guidelines.md) will be closed and must be corrected before re-opening.
+# Type checking
+uv run mypy app/
 
----
-
-## Quick Pre-PR Checklist
-
-```
-✓ Branch name follows convention
-✓ Commits follow Conventional Commits format
-✓ .env not committed; .env.example updated if new vars added
-✓ ruff (lint + format) and mypy pass with zero errors
-✓ No print() — structured logger used
-✓ No hardcoded values — all config from settings
-✓ Custom exceptions used — no raw Exception
-✓ Docstrings on all public classes and methods
-✓ Tests added and passing
-✓ PR description filled out completely
-✓ PR is under 600 lines and single-concern
+# Run tests
+uv run pytest -q app/tests
 ```
 
 ---
 
-## Full PR Guidelines
+## Pull Request Process
 
-For the complete set of rules covering branch naming, commit standards, architecture rules, security requirements, testing expectations, review process, and automatic rejection criteria, read:
-
-**[docs/pull-request-guidelines.md](./docs/pull-request-guidelines.md)**
-
----
-
-## Licensing
-
-By contributing, you agree that your contributions will be licensed under the project's [License](./LICENSE.md).
-
----
-
-## Need Help?
-
-If you need clarification, open an issue or reach out to the maintainers directly.
-
-Thank you for contributing to Agentic Web Starter!
+1. Create a branch for your change.
+2. Ensure linting, typing, and tests pass.
+3. Open a Pull Request with a clear summary of what changed and why.

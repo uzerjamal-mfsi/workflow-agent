@@ -1,189 +1,222 @@
-# Agentic Web Starter
+# Workflow Agent
 
-<!-- Replace the URL below with your actual project logo/banner once available -->
-![Agentic Web Starter](https://placehold.co/900x200?text=Agentic+Web+Starter)
-
-FastAPI-based agentic RAG service with document ingestion and retrieval-augmented chat.
-
-## Table of Contents
-
-- [Agentic Web Starter](#agentic-web-starter)
-  - [Table of Contents](#table-of-contents)
-  - [Description](#description)
-  - [Features](#features)
-  - [Getting Started](#getting-started)
-    - [Prerequisites](#prerequisites)
-    - [Installation](#installation)
-  - [Usage](#usage)
-    - [Interactive API docs](#interactive-api-docs)
-    - [Quick examples](#quick-examples)
-    - [Run tests](#run-tests)
-    - [Documentation site](#documentation-site)
-  - [Contributing](#contributing)
-  - [License](#license)
-  - [Acknowledgments](#acknowledgments)
+An autonomous workflow execution agent built with **FastAPI** and **LangGraph**. It translates natural language goals into structured execution plans, retrieves standard operating procedures (SOPs) via **Qdrant**, enforces security and dependency policies, integrates **Human-in-the-Loop** approval gates, and reliably executes actions with automatic verification and error recovery.
 
 ---
 
-## Description
+## Workflow Flow Diagram
 
-**Agentic Web Starter** is a production-ready, batteries-included template for building agentic
-RAG (Retrieval-Augmented Generation) web services with FastAPI.  It ships with:
+The state machine manages the complete execution lifecycle with conditional routing for approvals, retries, and re-planning:
 
-- a vectorised document ingestion pipeline backed by **Qdrant**,
-- a **chat endpoint** that retrieves relevant context before querying an LLM,
-- **typed, validated settings** via `pydantic-settings`,
-- optional **LangSmith tracing** wired into the chat model,
-- a **Docusaurus** documentation site under `docs/` / `website/`, and
-- CI via GitHub Actions running Ruff, mypy, pytest, gitleaks, and pip-audit on every push.
+```text
+  [ START ]
+      │
+      ▼
+  [ parse_goal ]
+      │
+      ▼
+  [ retrieve_sops ]
+      │
+      ▼
+  [ generate_structured_plan ] ◀──────────────────┐ (Feedback provided)
+      │                                            │
+      ▼                                            │ (Logical error replan)
+  [ validate_dependencies_and_permissions ]        │
+      │                                            │
+      ▼                                            │
+  [ approval_gate ] ───(Feedback provided)─────────┤
+      │                                            │
+      ├─► Approved / No Approval Needed            │
+      │        │                                   │
+      │        ▼                                   │
+      │   [ execute_next_tool ] ◀─────────┐       │
+      │        │                           │       │
+      │        ▼                           │       │
+      │   [ verify ]                       │       │
+      │        │                           │       │
+      │        ├─► Next Step / Retry ──────┘       │
+      │        │                                   │
+      │        ├─► Logical Error ──────────────────┘
+      │        │
+      │        └─► Completed / Escalate ───► [ END ]
+      │
+      └─► Rejected / Invalid ──────────────► [ END ]
+```
 
-The starter is designed to be cloned and extended.  Add your own agents, prompts, or data
-sources on top of the existing foundation.
+### Flow Conditions Summary
+
+| Node | Decision / Condition | Destination |
+|---|---|---|
+| **approval_gate** | `approved == True` (or no approval required) | `execute_next_tool` |
+| **approval_gate** | Human provided `feedback` | `generate_structured_plan` (replan) |
+| **approval_gate** | Rejected without feedback or invalid plan | `END` |
+| **verify** | Step succeeded, more steps remaining (`next_step`) | `execute_next_tool` |
+| **verify** | Transient failure, retries < 3 (`retry`) | `execute_next_tool` |
+| **verify** | Logical error detected (`replan`) | `generate_structured_plan` (replan) |
+| **verify** | All steps complete (`completed`) or fatal error (`escalate`) | `END` |
 
 ---
 
 ## Features
 
-- **Document ingestion** — File upload and indexing into Qdrant with configurable embedding
-- **RAG chat** — Chat endpoint with retrieval augmentation and prompt orchestration
-- **Validated configuration** — `pydantic-settings` model with defaults and startup validation
-- **LLM tracing (optional)** — LangSmith tracer attached to the OpenRouter chat model
-- **Global exception handling** — Consistent error responses (401, 403, 404, 422, 500)
-- **Health check** — `/health` endpoint for liveness probes
-- **Tests** — Pytest + pytest-asyncio suite runnable locally or via Docker Compose
-- **CI pipeline** — GitHub Actions: Ruff, mypy, pytest, gitleaks, and pip-audit on every push
-- **Documentation site** — Docusaurus handbook with setup, architecture, API, and contribution guides
+- **Goal Parsing & Plan Generation**: Converts natural language requests into structured DAG action steps.
+- **SOP Retrieval**: Semantically retrieves standard operating procedures from Qdrant vector store.
+- **Policy & Permission Enforcement**: Identifies sensitive operations and bulk updates that require human sign-off.
+- **Human-in-the-Loop Approval Gate**: Pauses execution using LangGraph interrupts until approved or replanned with user feedback.
+- **Automated Verification & Recovery**: Verifies step output, retries transient network errors (up to 3x), and replans on logical parameter errors.
+- **State Persistence**: Checkpoints execution state using PostgreSQL (or in-memory for testing).
 
 ---
 
-## Getting Started
+## How to Run
 
 ### Prerequisites
 
-- **Python 3.11 or 3.12** for local development
-- **[uv](https://docs.astral.sh/uv/)** for dependency management
-- **Docker & Docker Compose** for containerised runs (recommended for production-like setups)
-- **Qdrant** (included as a Docker Compose service)
-- An **OpenRouter** API key for the LLM back-end
+- **Docker & Docker Compose** (recommended)
+- Or for local runs: **Python 3.11+**, **[uv](https://docs.astral.sh/uv/)**, and an **OpenRouter API Key**
 
-### Installation
+### 1. Configure Environment
 
-1. **Clone the repository and enter the directory:**
+Copy the `.env.example` file to `.env` and add your OpenRouter credentials:
 
+```bash
+cp .env.example .env
+```
+
+Set the essential variables:
+
+```ini
+OPENROUTER_API_KEY="your-openrouter-key"
+MODEL_NAME="openai/gpt-4o-mini"
+CHECKPOINTER_TYPE="memory"  # or "postgres"
+```
+
+### 2. Start the Service
+
+#### Option A: Docker Compose (Recommended)
+
+Starts the API, PostgreSQL, and Qdrant containers all at once:
+
+```bash
+docker compose up --build
+```
+
+Run in the background:
+```bash
+docker compose up -d --build
+```
+
+#### Option B: Local Python Development
+
+1. **Start backing databases (PostgreSQL & Qdrant):**
    ```bash
-   git clone https://github.com/<your-org>/agentic_web_starter.git
-   cd agentic_web_starter
+   docker compose up -d postgres qdrant
    ```
 
-2. **Copy the environment template and fill in your values:**
-
+2. **Install dependencies and setup git hooks:**
    ```bash
-   cp .env.example .env
+   make setup
+   # or: uv sync --extra dev && uv run pre-commit install
    ```
 
-   Key variables to configure:
-
-   | Variable | Description |
-   |----------|-------------|
-   | `OPENROUTER_API_KEY` | Required for the chat endpoint |
-   | `ALLOWED_ORIGINS` | Comma-separated CORS origins |
-   | `USE_QDRANT` | Set `false` to disable Qdrant retrieval |
-   | `LANGSMITH_TRACING` / `LANGSMITH_API_KEY` | Optional LangSmith tracing |
-
-   See `.env.example` and the [Configuration guide](docs/configuration.md) for the full list.
-
-3. **Run with Docker Compose (recommended):**
-
+3. **Seed mock data & ingest SOP documentation:**
    ```bash
-   docker compose up --build
+   make seed-db
+   make ingest-sops
    ```
 
-   The API is available at **http://localhost:8000**.
-
-   *Or* bootstrap a local development environment:
-
+4. **Launch the FastAPI application:**
    ```bash
-   make setup                     # uv sync + registers all git hooks
-   docker compose up -d qdrant    # start dependencies only
    uv run uvicorn app.main:app --reload
    ```
 
-   `make setup` runs `uv sync --extra dev` and installs the pre-commit, commit-msg, and
-   pre-push hooks. The pre-push hooks run mypy and pytest through `uv run`, so `uv` must be on
-   `PATH` when you push.
+---
+
+## How to Access
+
+| Interface | URL | Description |
+|---|---|---|
+| **API Root** | `http://localhost:8000` | Application root |
+| **Swagger UI** | `http://localhost:8000/docs` | Interactive OpenAPI playground |
+| **ReDoc** | `http://localhost:8000/redoc` | API reference viewer |
+| **Health Check** | `http://localhost:8000/health` | Liveness endpoint |
+| **Documentation Site** | `http://localhost:3000` | Docusaurus docs (`make docs`) |
 
 ---
 
-## Usage
+## Quick Usage Examples
 
-### Interactive API docs
-
-Open **http://localhost:8000/docs** in your browser for Swagger UI.
-
-### Quick examples
-
-**Health check:**
+### 1. Health Check
 
 ```bash
 curl http://localhost:8000/health
-# {"message":"Up and running"}
+# {"status":"ok"}
 ```
 
-**Chat with RAG:**
+### 2. Initiate a Workflow Goal
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat \
   -H "Content-Type: application/json" \
-  -d '{"thread_id": "session-1", "query": "Summarise the document"}'
+  -d '{
+    "message": "Check calendar availability for user-1 on 2026-11-10",
+    "thread_id": "session-101"
+  }'
 ```
 
-### Run tests
+### 3. Approve a Sensitive Operation (Human-in-the-Loop)
+
+When an operation requires approval (e.g. notifications or bulk updates), resume the thread:
 
 ```bash
-# In Docker (recommended — no local deps required)
-docker compose run tests
-
-# Locally (uv sync first)
-uv run pytest -q app/tests
+curl -X POST http://localhost:8000/api/v1/chat/approve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "thread_id": "session-101",
+    "approved": true
+  }'
 ```
 
-### Documentation site
+Or provide corrective feedback to trigger automatic re-planning:
 
 ```bash
-make docs        # starts Docusaurus dev server at http://localhost:3000
-make docs-build  # production build → website/build/
+curl -X POST http://localhost:8000/api/v1/chat/approve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "thread_id": "session-101",
+    "approved": false,
+    "feedback": "Change the priority to high and assign to user-2"
+  }'
 ```
-
-Refer to the [full documentation](docs/) for architecture decisions, configuration reference,
-authentication flows, and the API reference.
 
 ---
 
-## Contributing
+## Running Tests
 
-Contributions are welcome!  Please read [CONTRIBUTING.md](docs/contributing.md) before opening a
-pull request or issue.  The key points:
+Run the test suite:
 
-- Use [Conventional Commits](https://www.conventionalcommits.org/) for all commit messages.
-  The `commit-msg` hook enforces this automatically after `make setup`.
-- Run `pre-commit run --all-files` before pushing to ensure linting and formatting pass.
-- All PRs must use the [pull request template](.github/pull_request_template.md) and reference a
-  linked issue.
-- Never push directly to `main`.
+```bash
+# Locally
+uv run pytest -q app/tests
+
+# In Docker
+docker compose run tests
+```
+
+---
+
+## Documentation (Docusaurus)
+
+```bash
+# Start documentation site locally
+make docs
+
+# Build static production documentation site
+make docs-build
+```
 
 ---
 
 ## License
 
-This project is licensed under the **MIT License** — see [LICENSE.md](LICENSE.md) for details.
-
----
-
-## Acknowledgments
-
-- [FastAPI](https://fastapi.tiangolo.com/) — the web framework powering the API
-- [Qdrant](https://qdrant.tech/) — vector database for similarity search
-- [LangChain](https://www.langchain.com/) — orchestration framework for LLM pipelines
-- [Docusaurus](https://docusaurus.io/) — documentation site generator
-- [pre-commit](https://pre-commit.com/) — multi-language pre-commit hook framework
-- [commitizen](https://commitizen-tools.github.io/commitizen/) — Conventional Commits enforcement
+This project is licensed under the [MIT License](LICENSE.md).

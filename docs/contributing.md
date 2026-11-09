@@ -1,99 +1,81 @@
 ---
-sidebar_position: 7
+sidebar_position: 6
 title: Contributing
-description: How to contribute code, documentation, and issue reports to Agentic Web Starter.
+description: Contribution guidelines, code standards, and testing procedures.
 ---
 
 # Contributing
 
-Contributions of all kinds are welcome — whether you are fixing a bug, improving the docs,
-proposing a new feature, or helping review pull requests.
+Contributions to Workflow Agent are welcome. Follow these straightforward guidelines to ensure consistent code quality and seamless reviews.
 
 ---
 
-## Before you start
+## Development Setup
 
-1. **Search open issues** to see if someone has already reported the bug or requested the feature.
-2. **Open an issue first** for any non-trivial change — this aligns expectations before you invest
-   time in a PR.
-3. **Fork the repository** and work on a branch.  Never push directly to `main`.
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/thiga-mindfire/workflow-agent.git
+   cd workflow-agent
+   ```
 
----
+2. **Configure environment:**
+   ```bash
+   cp .env.example .env
+   ```
 
-## Contribution workflow
-
-Follow these steps for every contribution:
-
-### 1 — Set up your environment
-
-```bash
-git clone https://github.com/<your-fork>/agentic_web_starter.git
-cd agentic_web_starter
-cp .env.example .env          # configure your local settings
-make setup                    # uv sync + registers git hooks
-```
-
-`make setup` installs pre-commit (pre-commit, pre-push, and commit-msg stages), so formatting and
-Conventional Commits validation run automatically before every push.
-
-### 2 — Create a branch
-
-Follow the naming convention defined in [Pull request guidelines § 1](./pull-request-guidelines#1-branch-naming):
-
-```
-feature/add-redis-history-ttl
-fix/qdrant-collection-init-error
-docs/update-jwt-auth-flow
-```
-
-### 3 — Make your changes
-
-- Keep changes focused — one concern per PR.
-- Write or update tests for any logic you add or modify.
-- Add Google-style docstrings to new public classes and methods.
-- Never hardcode values — use `settings` from `app/config/env_config.py`.
-
-### 4 — Check locally before pushing
-
-```bash
-uv run ruff check --fix app/ && uv run ruff format app/
-uv run mypy app/
-uv run pytest -q app/tests
-```
-
-Or let the pre-commit hooks do it for you:
-
-```bash
-pre-commit run --all-files
-```
-
-### 5 — Open a pull request
-
-Use the [PR template](https://github.com/<your-org>/agentic_web_starter/blob/main/.github/pull_request_template.md) — fill in every section.  PRs with empty
-descriptions are returned without review.
-
-All commit messages must follow [Conventional Commits](https://www.conventionalcommits.org/).
-The `commit-msg` hook enforces this automatically, but a quick reminder:
-
-```
-feat(agents): add timeout handling to supervisor agent
-fix(repository): handle empty result set in base_repository query
-docs(auth): update JWT flow diagram for refresh token support
-```
+3. **Install dependencies and git hooks:**
+   ```bash
+   make setup
+   # or manually:
+   # uv sync --extra dev
+   # uv run pre-commit install
+   ```
 
 ---
 
-## Standards reference
+## Branch Naming & Commits
 
-| Resource | What it covers |
-|----------|----------------|
-| [Pull request guidelines](./pull-request-guidelines) | Branch naming, commit format, code rules, security, testing, PR checklist, review process |
-| [Architecture](./architecture) | Layer responsibilities and where new code should live |
-| [Configuration](./configuration) | How to add new environment variables correctly |
+- **Branch Naming**:
+  - `feat/<description>` — New features
+  - `fix/<description>` — Bug fixes
+  - `docs/<description>` — Documentation updates
+  - `refactor/<description>` — Code refactoring
+  - `test/<description>` — Test additions or updates
+
+- **Conventional Commits**:
+  Commit messages must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
+  ```
+  feat(agents): add fallback routing in verification node
+  fix(routes): validate approval request payload
+  docs(readme): add architecture flow diagram
+  ```
 
 ---
 
-## Licensing
+## Code Quality & Testing
 
-By opening a pull request you agree that your contribution will be licensed under the project
-license in `LICENSE.md` at the repository root.
+Before submitting a pull request, run code checks and tests:
+
+1. **Linting and formatting:**
+   ```bash
+   uv run ruff check app/
+   uv run ruff format app/
+   ```
+
+2. **Type checking:**
+   ```bash
+   uv run mypy app/
+   ```
+
+3. **Run test suite:**
+   ```bash
+   uv run pytest -q app/tests
+   ```
+
+---
+
+## Pull Request Process
+
+1. Create your feature branch from `main`.
+2. Ensure all linting, typing, and tests pass.
+3. Open a Pull Request describing your changes and link any related issues.

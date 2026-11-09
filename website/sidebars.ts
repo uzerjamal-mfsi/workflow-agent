@@ -4,12 +4,10 @@ const sidebars: SidebarsConfig = {
   docsSidebar: [
     'intro',
     'getting-started',
-    'configuration',
     'architecture',
-    'authentication-and-iam',
     'api-reference',
+    'configuration',
     'contributing',
-    'pull-request-guidelines',
   ],
 };
 

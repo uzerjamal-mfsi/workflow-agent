@@ -1,86 +1,59 @@
 ---
-sidebar_position: 3
+sidebar_position: 5
 title: Configuration
-description: Environment variables validated by app.config.env_config.Settings.
+description: Environment variables reference for Workflow Agent.
 ---
 
 # Configuration
 
-Settings are declared as a `pydantic-settings` model in `app/config/env_config.py`.
-Values are read from the process environment first and then from `.env`, so environment
-variables always win. Unknown variables are ignored; invalid values fail at startup.
+Workflow Agent is configured via environment variables and `.env`. Settings are validated at startup via `pydantic-settings` in `app/config/env_config.py`.
 
-To configure the project:
+To get started:
 
 ```bash
 cp .env.example .env
-# Edit .env with your values
 ```
 
-**Never commit `.env`.** It is already in `.gitignore`; use `.env.example` for placeholders.
-
 ---
 
-## Project and API
+## Environment Variables
+
+### 1. LLM Settings
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `ENV` | `dev` | Environment name. `dev` enables debug logging. |
-| `PROJECT_NAME` | `agentic_web_starter` | FastAPI title, and the directory name under `WORKING_DIR`. |
-| `PROJECT_VERSION` | `0.1.0` | Appears in the OpenAPI schema. |
-| `PROJECT_DESCRIPTION` | `An agentic workflow automation application.` | Appears in the OpenAPI schema. |
-| `ALLOWED_ORIGINS` | *(empty)* | Comma-separated CORS origins, e.g. `http://localhost:3000,https://myapp.com`. Empty entries are dropped. |
-| `BASE_PATH` | *(empty)* | Root path when running behind a reverse proxy. Also shifts the OpenAPI URL. |
+|---|---|---|
+| `OPENROUTER_API_KEY` | *(Required)* | OpenRouter API Key used to authenticate with LLM models. |
+| `MODEL_NAME` | *(Required)* | Target LLM model name (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3.5-sonnet`). |
 
----
-
-## Working directory
+### 2. Qdrant (Vector Database)
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `WORKING_DIR` | `.` | Base directory for logs and the Hugging Face cache. |
-| `HF_HOME` | `<WORKING_DIR>/<PROJECT_NAME>/hf` | Hugging Face cache. Exported to the process environment. |
+|---|---|---|
+| `QDRANT_URL` | `http://localhost:6333` | URL for Qdrant vector database instance. |
+| `QDRANT_COLLECTION` | `workflow-sop` | Name of the collection storing SOP embeddings. |
+| `QDRANT_API_KEY` | `None` | Optional API key for managed/remote Qdrant instances. |
+| `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Hugging Face embedding model used for vectorization. |
+| `EMBEDDING_DIMENSION` | `384` | Dimension of vectors produced by the embedding model. |
 
-Derived read-only settings (not set via env):
-
-| Setting | Value |
-|---------|-------|
-| `WORKING_PROJECT_DIR` | `<WORKING_DIR>/<PROJECT_NAME>` |
-| `LOG_DIR` | `<WORKING_DIR>/<PROJECT_NAME>/logs` |
-
----
-
-## LLM
+### 3. PostgreSQL & Persistence
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `OPENROUTER_API_KEY` | *(unset)* | Required for the `/api/v1/chat` endpoint. |
+|---|---|---|
+| `POSTGRES_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/workflow_agent` | PostgreSQL connection string for mock tools and checkpoint storage. |
+| `CHECKPOINTER_TYPE` | `memory` | State checkpointer engine. Choose `memory` for transient local runs or `postgres` for persistent multi-turn workflows. |
 
----
-
-## Qdrant
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `USE_QDRANT` | `true` | Enables the Qdrant-backed retrieval path. |
-| `COLLECTION_NAME` | `agentic_web_starter` | Base name of the Qdrant collection. |
-| `QDRANT_HOST` | `qdrant` | Hostname or IP (`localhost` when running outside Docker). |
-| `QDRANT_PORT` | `6333` | HTTP port. |
-| `QDRANT_PROTOCOL` | `http` | `http` or `https`. |
-
----
-
-## LangSmith tracing
+### 4. LangSmith Tracing (Optional)
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `LANGSMITH_TRACING` | `false` | Enables the LangSmith tracer attached to the chat model. |
-| `LANGSMITH_API_KEY` | *(unset)* | Required when `LANGSMITH_TRACING=true`; startup fails otherwise. |
-| `LANGSMITH_PROJECT` | `workflow-agent` | LangSmith project that receives the traces. |
+|---|---|---|
+| `LANGSMITH_TRACING` | `false` | Set to `true` to enable execution tracing in LangSmith. |
+| `LANGSMITH_API_KEY` | `None` | LangSmith API Key (required if tracing is enabled). |
+| `LANGSMITH_PROJECT` | `workflow-sop` | Target project name in LangSmith. |
 
----
+### 5. Application Metadata & CORS
 
-## Full reference
-
-- **`.env.example`** in the repository root — placeholders and comments
-- **`app/config/env_config.py`** — typed fields, defaults, and validators
+| Variable | Default | Description |
+|---|---|---|
+| `ENV` | `dev` | Current environment (`dev`, `prod`). |
+| `ALLOWED_ORIGINS` | `http://localhost:3000,http://localhost:8000` | Comma-separated list of allowed CORS origins. |
+| `WORKING_DIR` | *(Current directory)* | Working directory path for storage and caches. |

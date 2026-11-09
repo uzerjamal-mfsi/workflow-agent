@@ -1,138 +1,136 @@
 ---
 sidebar_position: 2
-title: Getting started
-description: Environment setup, Docker, and running the API locally.
+title: Getting Started
+description: How to set up, run, and access Workflow Agent.
 ---
 
-# Getting started
+# Getting Started
 
-This page walks you from a fresh clone to a running API. If you run into trouble, check the
-[Configuration](./configuration) page for the full variable reference or open an issue.
+Follow these steps to configure, run, and interact with the Workflow Agent.
 
 ---
 
 ## Prerequisites
 
-| Requirement | Notes |
-|-------------|-------|
-| **Python 3.11 or 3.12** | See `pyproject.toml` for the supported range |
-| **uv** | Installs dependencies and runs tooling |
-| **Docker & Docker Compose** | Required for the recommended setup |
-| **OpenRouter API key** | Needed for the chat endpoint |
+- **Docker & Docker Compose** (recommended)
+- Or for local runs:
+  - **Python 3.11 or 3.12**
+  - **[uv](https://docs.astral.sh/uv/)** package manager
+  - An **OpenRouter API Key**
 
 ---
 
-## Step 1 — Configure your environment
+## 1. Configure Environment
 
-Copy the example file and fill in your values:
+Copy the example `.env` file and set your keys:
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` in your editor. The most important variables to set right away are:
+At minimum, provide your OpenRouter API key and model:
 
-| Variable | Why it matters |
-|----------|----------------|
-| `OPENROUTER_API_KEY` | Powers the chat endpoint |
-| `ALLOWED_ORIGINS` | Comma-separated origins allowed by CORS |
-| `LANGSMITH_TRACING` / `LANGSMITH_API_KEY` | Optional: send LLM traces to LangSmith |
-
-See [Configuration](./configuration) for the full list.
-
-**Never commit `.env` to version control.** It is already in `.gitignore`.
+```ini
+OPENROUTER_API_KEY="your-openrouter-api-key"
+MODEL_NAME="openai/gpt-4o-mini"
+CHECKPOINTER_TYPE="memory"  # or "postgres" for persistent checkpointing
+```
 
 ---
 
-## Step 2 — Start the service
+## 2. Run the Application
 
-### Option A — Docker Compose (recommended)
+### Option A: Docker Compose (Recommended)
 
-This starts the API and Qdrant:
+Starts the API, PostgreSQL database, and Qdrant vector database in containers:
 
 ```bash
 docker compose up --build
 ```
 
-The API is available at **http://localhost:8000**.
-Open **http://localhost:8000/docs** for interactive Swagger UI.
-
-Other useful commands:
+To run in detached (background) mode:
 
 ```bash
-docker compose up -d --build   # run in the background (detached)
-docker compose down            # stop all services
-docker compose run tests       # run the test suite inside Docker
+docker compose up -d --build
 ```
 
-### Option B — Local Python with Docker for Qdrant
-
-**1. Start the backing service:**
+To stop containers:
 
 ```bash
-docker compose up -d qdrant
-```
-
-Point the API at the published port in `.env`:
-
-```
-QDRANT_HOST=localhost
-```
-
-**2. Bootstrap your Python environment (run once per clone):**
-
-```bash
-make setup
-```
-
-This runs `uv sync --extra dev` and registers the pre-commit, pre-push, and commit-msg hooks.
-
-**Manual setup (without Make):**
-
-```bash
-uv sync --extra dev
-uv run pre-commit install
-```
-
-**3. Start the API:**
-
-```bash
-uv run uvicorn app.main:app --reload
-```
-
-Or production-style with Gunicorn:
-
-```bash
-uv run gunicorn app.main:app -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+docker compose down
 ```
 
 ---
 
-## Step 3 — Verify everything is working
+### Option B: Local Development
+
+1. **Start backing services (PostgreSQL & Qdrant):**
+
+   ```bash
+   docker compose up -d postgres qdrant
+   ```
+
+2. **Install dependencies:**
+
+   ```bash
+   make setup
+   # or manually: uv sync --extra dev
+   ```
+
+3. **Initialize mock database and ingest SOPs into Qdrant:**
+
+   ```bash
+   make seed-db
+   make ingest-sops
+   ```
+
+4. **Start the API server:**
+
+   ```bash
+   uv run uvicorn app.main:app --reload
+   ```
+
+---
+
+## 3. How to Access
+
+| Resource | URL | Description |
+|---|---|---|
+| **API Base** | `http://localhost:8000` | Root API host |
+| **Interactive Docs (Swagger UI)** | `http://localhost:8000/docs` | Test endpoints interactively |
+| **ReDoc** | `http://localhost:8000/redoc` | Alternative API reference |
+| **Health Check** | `http://localhost:8000/health` | Service liveness probe |
+| **Documentation Site** | `http://localhost:3000` | Run with `make docs` |
+
+---
+
+## 4. Quick Verification
+
+Check the health status:
 
 ```bash
 curl http://localhost:8000/health
-# Expected: {"message":"Up and running"}
+# {"status":"ok"}
 ```
 
-Then open **http://localhost:8000/docs** to explore the API interactively.
-
----
-
-## Running tests
+Send a workflow goal:
 
 ```bash
-# Recommended — full stack inside Docker, no local deps required
-docker compose run tests
-
-# Locally
-uv run pytest -q app/tests
+curl -X POST http://localhost:8000/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Check calendar availability for user-1 on 2026-11-10", "thread_id": "test-session"}'
 ```
 
 ---
 
-## Next steps
+## 5. Running Tests
 
-- [Configuration](./configuration) — every environment variable and its default
-- [Architecture](./architecture) — how the layers fit together
-- [API reference](./api-reference) — endpoint list with request/response examples
+Run the full pytest suite:
+
+```bash
+# Locally
+uv run pytest -q app/tests
+
+# In Docker
+docker compose run tests
+```

@@ -11,31 +11,32 @@ type FeatureItem = {
 
 const FeatureList: FeatureItem[] = [
   {
-    title: 'RAG & ingestion',
+    title: 'LangGraph Orchestration',
     Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
     description: (
       <>
-        Document upload, embeddings, and Qdrant-backed retrieval with optional
-        RabbitMQ for async indexing.
+        Multi-step plan execution with persistent state checkpointing in
+        PostgreSQL or in-memory, self-verification, and automatic retry loops.
       </>
     ),
   },
   {
-    title: 'Chat & memory',
+    title: 'Human-in-the-Loop Approval',
     Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
     description: (
       <>
-        Retrieval-augmented chat with configurable Redis or in-memory history.
+        Approval gate pauses execution for sensitive operations and bulk updates
+        using LangGraph interrupts until approved or replanned with feedback.
       </>
     ),
   },
   {
-    title: 'Auth & IAM',
+    title: 'SOP Retrieval & Tools',
     Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
     description: (
       <>
-        Optional JWT auth, users, roles, and ACLs backed by SQLite when
-        enabled.
+        Retrieves standard operating procedures from Qdrant vector store and
+        dispatches to task management, calendar lookups, and notifications.
       </>
     ),
   },

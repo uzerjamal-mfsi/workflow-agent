@@ -1,139 +1,102 @@
 ---
-sidebar_position: 4
+sidebar_position: 3
 title: Architecture
-description: Layers and main packages in the Agentic Web Starter codebase.
+description: LangGraph state machine, nodes, conditional edges, and execution flow.
 ---
 
 # Architecture
 
-This page explains how the codebase is structured, how a request flows through the system, and
-where to find each type of logic.  Understanding the layered design makes it much easier to add
-new features without breaking existing ones.
+Workflow Agent is orchestrated as a stateful graph using **LangGraph**. Requests are processed through a directed acyclic state graph with conditional branches for Human-in-the-Loop approvals, tool verification, retry loops, and automatic re-planning.
 
 ---
 
-## Request flow
+## Workflow State Graph
 
-Every HTTP request follows the same path through the application:
+The diagram below illustrates the complete graph flow, including all conditional branches and decision points:
 
+```text
+  [ START ]
+      │
+      ▼
+  [ parse_goal ]
+      │
+      ▼
+  [ retrieve_sops ]
+      │
+      ▼
+  [ generate_structured_plan ] ◀───────────────────┐ (Feedback provided)
+      │                                            │
+      ▼                                            │ (Logical error replan)
+  [ validate_dependencies_and_permissions ]        │
+      │                                            │
+      ▼                                            │
+  [ approval_gate ] ───(Feedback provided)─────────┤
+      │                                            │
+      ├─► Approved / No Approval Needed            │
+      │        │                                   │
+      │        ▼                                   │
+      │   [ execute_next_tool ] ◀──────────┐       │
+      │        │                           │       │
+      │        ▼                           │       │
+      │   [ verify ]                       │       │
+      │        │                           │       │
+      │        ├─► Next Step / Retry ──────┘       │
+      │        │                                   │
+      │        ├─► Logical Error ──────────────────┘
+      │        │
+      │        └─► Completed / Escalate ───► [ END ]
+      │
+      └─► Rejected / Invalid ──────────────► [ END ]
 ```
-Client
-  └─▶ Routes          (app/routes/)         — parse request, inject deps, format response
-        └─▶ Services  (app/services/)        — business logic, orchestration, ACL checks
-              └─▶ Repositories (app/repository/) — data access: SQL, Qdrant, Redis
-```
-
-Each layer has a single responsibility.  **Routes never contain business logic**, and **services
-never talk directly to a database** — they always go through a repository.
 
 ---
 
-## Layer responsibilities
+## Graph Nodes & Responsibilities
 
-### Routes — `app/routes/`
-
-HTTP adapters only.  A route handler should do nothing more than:
-
-1. Parse and validate the incoming request (FastAPI handles this via Pydantic schemas).
-2. Call the appropriate service method.
-3. Return a formatted response.
-
-There are two route groups:
-
-| Package | Handles |
-|---------|---------|
-| `app/routes/core_routes/` | Chat (`/api/v1/chat`) and document ingestion (`/api/v1/upload`) |
-| `app/routes/iam_routes/` | Auth, users, and roles — **only registered when `USE_SQL=true`** |
+| Node | Purpose | Behavior |
+|---|---|---|
+| `parse_goal` | Ingests the incoming request | Extracts the user's intent and populates `goal` in workflow state. |
+| `retrieve_sops` | Context retrieval | Queries the **Qdrant** vector store for Standard Operating Procedures matching the goal. |
+| `generate_structured_plan` | Plan creation | Uses the LLM to generate an ordered list of tool execution steps (`Plan`). |
+| `validate_dependencies_and_permissions` | DAG & policy check | Validates dependency order, checks for cycles, and marks `requires_approval = True` if sensitive tools or bulk actions are present. |
+| `approval_gate` | Human-in-the-Loop | If `requires_approval` is `False`, automatically approves. If `True`, triggers a LangGraph `interrupt()` and awaits human decision via `/api/v1/chat/approve`. |
+| `execute_next_tool` | Tool execution | Executes the current step tool (e.g. `create_task`, `update_task`, `send_notification`, `check_calendar_availability`) and records `StepResult`. |
+| `verify` | Result verification | Checks if the step succeeded. Increments retry counter for transient errors, flags logical errors for re-planning, or advances step index. |
 
 ---
 
-### Services — `app/services/`
+## Conditional Routing Logic
 
-Business rules live here.  Services orchestrate calls to repositories, apply ACL checks, and
-raise domain exceptions when something goes wrong.
+### 1. `route_after_approval` (from `approval_gate`)
 
-| Package | Purpose |
-|---------|---------|
-| `core_services/` | Ingestion pipeline, RAG chat, agent orchestration |
-| `iam_services/` | Authentication, user/role CRUD, admin bootstrap |
-| `message_queue_services/` | Publishing ingestion jobs to RabbitMQ |
+- **`execute_next_tool`**: State `approved == True` (either no approval required, or human confirmed approval).
+- **`generate_structured_plan`**: Human provided feedback without approving (`feedback` is present), prompting the planner to revise the plan.
+- **`END`**: Human rejected the request without feedback or plan validation failed.
 
----
+### 2. `route_after_verification` (from `verify`)
 
-### Repositories — `app/repository/`
-
-The only place that touches a data store directly.  Services call repository methods; they never
-write raw queries or SDK calls themselves.
-
-| Package | Store |
-|---------|-------|
-| `sql_repository/` | SQLite — users, roles, components, ACL mappings |
-| `vector_repository/` | Qdrant — document chunk embeddings |
+- **`execute_next_tool`**:
+  - `verification_outcome == "next_step"`: Step succeeded, moves to the next step in the plan.
+  - `verification_outcome == "retry"`: Step encountered a transient failure (e.g. network timeout) and retry count < 3.
+- **`generate_structured_plan`**: `verification_outcome == "replan"`: A logical error occurred (e.g. invalid parameter), triggering automatic re-planning with error context.
+- **`END`**:
+  - `verification_outcome == "completed"`: All plan steps finished successfully.
+  - `verification_outcome == "escalate"`: Fatal error or max retries exceeded.
 
 ---
 
-### Utilities — `app/utils/`
+## State & Checkpointing
 
-Shared helpers that do not belong in a specific service.
+Workflow state is tracked via the `WorkflowState` schema:
+- `thread_id`: Unique identifier for the workflow session.
+- `goal`: Parsed user objective.
+- `retrieved_sops`: SOP context retrieved from Qdrant.
+- `plan`: Structured plan containing steps, tool names, and arguments.
+- `current_step_index`: Pointer to the active step.
+- `requires_approval`, `approved`, `feedback`: Human-in-the-Loop state.
+- `completed_steps`: Results of successfully executed steps.
+- `retry_count`: Transient retry counter.
 
-| Package | Contains |
-|---------|---------|
-| `core_utils/` | File handling, embedding calls, Redis helpers, DB session helpers |
-| `iam_utils/` | JWT creation and validation, Argon2 password hashing, FastAPI auth dependencies |
-
----
-
-## Application entry points
-
-| File | Role |
-|------|------|
-| `app/main.py` | ASGI entry point — used by Uvicorn and Gunicorn |
-| `app/starter.py` | Builds the `FastAPI` app: CORS, exception handlers, router registration, startup tasks |
-
-`app/starter.py` is where feature flags (`USE_SQL`, `USE_QDRANT`, etc.) control which routers are
-mounted at startup.
-
----
-
-## Agents and tools
-
-The agentic layer sits on top of the service layer:
-
-| Package | Purpose |
-|---------|---------|
-| `app/agents/` | Supervisor and retriever agents; all agents extend `BaseAgent` |
-| `app/tools/` | LangChain tools for indexing and retrieval; all tools subclass `BaseTool` |
-| `app/prompts/` | Prompt templates used by agents |
-
----
-
-## Workers
-
-`app/workers/ingestion_worker.py` runs as a separate process.  When `USE_RABBITMQ=true`, it
-consumes the ingest queue and indexes documents into Qdrant asynchronously — decoupling the
-upload response time from the indexing operation.
-
----
-
-## Error handling
-
-All domain errors are defined in `app/exceptions/domain.py` and extend a common `AppError` base.
-Global handlers in `app/exceptions/handlers.py` translate them into consistent JSON responses.
-
-Never raise raw `Exception`, `ValueError`, or FastAPI's `HTTPException` from services or
-repositories — always use the custom hierarchy.
-
----
-
-## Tests
-
-Tests live under `app/tests/` and mirror the source structure.  Route-level tests use
-`httpx.TestClient` with fixtures defined in `app/tests/conftest.py`.
-
----
-
-## Further reading
-
-- [Authentication & IAM](./authentication-and-iam) — JWT flow and ACL components in detail
-- [Configuration](./configuration) — feature flags and environment variables
-- [Pull request guidelines](./pull-request-guidelines) — code rules that enforce this architecture
+State persistence is configured via `CHECKPOINTER_TYPE`:
+- **`memory`**: Uses `MemorySaver` (in-memory, ideal for local tests).
+- **`postgres`**: Uses `AsyncPostgresSaver` backed by PostgreSQL for production persistence.

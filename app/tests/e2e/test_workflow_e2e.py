@@ -1,7 +1,6 @@
-"""Simplified End-to-End test suite for the Workflow Agent.
+"""End-to-End test suite for the Workflow Agent.
 
 Covers the full user journey through the REST API (/api/v1/chat, /api/v1/chat/approve)
-and LangGraph state progression:
 1. Autonomous execution (task creation)
 2. Autonomous execution (calendar availability)
 3. Sensitive action (approval gate -> human approved -> executed)
