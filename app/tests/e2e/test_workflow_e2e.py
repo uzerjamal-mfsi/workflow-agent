@@ -23,6 +23,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 import app.agents.workflow_agent as workflow_agent
 from app.agents.checkpointer import get_checkpointer
+from app.config.env_config import get_settings
 from app.main import app
 from app.schemas.core_schemas.tool_schemas import (
     CheckCalendarArgs,
@@ -78,8 +79,13 @@ async def e2e_env(
             graph = workflow_agent.get_workflow_graph(memory_checkpointer)
             return await graph.aget_state({"configurable": {"thread_id": thread_id}})
 
+        settings = get_settings()
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://test",
+            headers={"X-API-Key": settings.API_KEY.get_secret_value()},
+        ) as client:
             yield client, get_state, mock_structured.invoke, mock_run_tool
 
     app.dependency_overrides.clear()

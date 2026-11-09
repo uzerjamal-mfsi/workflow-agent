@@ -2,7 +2,7 @@ import re
 from functools import lru_cache
 from typing import ClassVar, Literal
 
-from pydantic import SecretStr
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,10 +24,20 @@ class Settings(BaseSettings):
     EMBEDDING_DIMENSION: int = 384
 
     # Postgres settings
-    POSTGRES_URL: str ="postgresql+psycopg://postgres:postgres@localhost:5432/workflow_agent"
+    POSTGRES_URL: str = (
+        "postgresql+psycopg://postgres:postgres@localhost:5432/workflow_agent"
+    )
 
     # Persistence mode
     CHECKPOINTER_TYPE: Literal["memory", "postgres"] = "memory"
+
+    # API Security
+    API_KEY: SecretStr = Field(
+        ...,
+        min_length=1,
+        validation_alias=AliasChoices("API_KEY", "CHAT_API_KEY"),
+        description="Required API key for authenticating chat endpoints via X-API-Key header",
+    )
 
     # LLM
     OPENROUTER_API_KEY: SecretStr
@@ -36,7 +46,10 @@ class Settings(BaseSettings):
     @property
     def raw_postgres_url(self) -> str:
         """Strip driver prefixes (e.g. '+psycopg', '+asyncpg') for tools that expect plain 'postgresql://'."""
-        return re.sub(r"^postgresql\+[a-zA-Z0-9_]+://", "postgresql://", self.POSTGRES_URL)
+        return re.sub(
+            r"^postgresql\+[a-zA-Z0-9_]+://", "postgresql://", self.POSTGRES_URL
+        )
+
 
 @lru_cache()
 def get_settings() -> Settings:

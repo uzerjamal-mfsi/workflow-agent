@@ -18,14 +18,20 @@ cp .env.example .env
 
 ## Environment Variables
 
-### 1. LLM Settings
+### 1. API Authentication & Security
+
+| Variable | Default | Description |
+|---|---|---|
+| `API_KEY` | *(Required)* | Secret key used to authenticate requests to `/api/v1/*` chat endpoints via the `X-API-Key` header. There is no default; it must be defined in `.env` or environment variables, otherwise application startup raises a validation error. (Alias: `CHAT_API_KEY`). |
+
+### 2. LLM Settings
 
 | Variable | Default | Description |
 |---|---|---|
 | `OPENROUTER_API_KEY` | *(Required)* | OpenRouter API Key used to authenticate with LLM models. |
 | `MODEL_NAME` | *(Required)* | Target LLM model name (e.g. `openai/gpt-4o-mini`, `anthropic/claude-3.5-sonnet`). |
 
-### 2. Qdrant (Vector Database)
+### 3. Qdrant (Vector Database)
 
 | Variable | Default | Description |
 |---|---|---|
@@ -35,14 +41,14 @@ cp .env.example .env
 | `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Hugging Face embedding model used for vectorization. |
 | `EMBEDDING_DIMENSION` | `384` | Dimension of vectors produced by the embedding model. |
 
-### 3. PostgreSQL & Persistence
+### 4. PostgreSQL & Persistence
 
 | Variable | Default | Description |
 |---|---|---|
 | `POSTGRES_URL` | `postgresql+psycopg://postgres:postgres@localhost:5432/workflow_agent` | PostgreSQL connection string for mock tools and checkpoint storage. |
 | `CHECKPOINTER_TYPE` | `memory` | State checkpointer engine. Choose `memory` for transient local runs or `postgres` for persistent multi-turn workflows. |
 
-### 4. LangSmith Tracing (Optional)
+### 5. LangSmith Tracing (Optional)
 
 | Variable | Default | Description |
 |---|---|---|
@@ -50,7 +56,7 @@ cp .env.example .env
 | `LANGSMITH_API_KEY` | `None` | LangSmith API Key (required if tracing is enabled). |
 | `LANGSMITH_PROJECT` | `workflow-sop` | Target project name in LangSmith. |
 
-### 5. Application Metadata & CORS
+### 6. Application Metadata & CORS
 
 | Variable | Default | Description |
 |---|---|---|

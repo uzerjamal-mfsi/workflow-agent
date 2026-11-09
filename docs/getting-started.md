@@ -28,12 +28,13 @@ Copy the example `.env` file and set your keys:
 cp .env.example .env
 ```
 
-At minimum, provide your OpenRouter API key and model:
+At minimum, provide your OpenRouter API key, model, and application API key (no default; required for chat routes):
 
 ```ini
 OPENROUTER_API_KEY="your-openrouter-api-key"
 MODEL_NAME="openai/gpt-4o-mini"
 CHECKPOINTER_TYPE="memory"  # or "postgres" for persistent checkpointing
+API_KEY="your-secret-api-key"  # Required: no default; must be set in .env
 ```
 
 ---
@@ -118,6 +119,7 @@ Send a workflow goal:
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: workflow-agent-secret-key" \
   -d '{"message": "Check calendar availability for user-1 on 2026-11-10", "thread_id": "test-session"}'
 ```
 

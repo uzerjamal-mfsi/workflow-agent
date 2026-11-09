@@ -87,8 +87,9 @@ Set the essential variables:
 
 ```ini
 OPENROUTER_API_KEY="your-openrouter-key"
-MODEL_NAME="openai/gpt-4o-mini"
+MODEL_NAME="nvidia/nemotron-3-ultra-550b-a55b:free"
 CHECKPOINTER_TYPE="memory"  # or "postgres"
+API_KEY="secret-key"  # API key for /api/v1/
 ```
 
 ### 2. Start the Service
@@ -158,6 +159,7 @@ curl http://localhost:8000/health
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: secret-key" \
   -d '{
     "message": "Check calendar availability for user-1 on 2026-11-10",
     "thread_id": "session-101"
@@ -171,6 +173,7 @@ When an operation requires approval (e.g. notifications or bulk updates), resume
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat/approve \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: secret-key" \
   -d '{
     "thread_id": "session-101",
     "approved": true
@@ -182,6 +185,7 @@ Or provide corrective feedback to trigger automatic re-planning:
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat/approve \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: secret-key" \
   -d '{
     "thread_id": "session-101",
     "approved": false,

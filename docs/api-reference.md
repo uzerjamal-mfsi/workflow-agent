@@ -12,12 +12,46 @@ Interactive API documentation with live execution is available via Swagger UI at
 
 ---
 
+## Authentication
+
+All `/api/v1/*` chat endpoints are secured via **API Key authentication**.
+
+Requests must include the API key in the `X-API-Key` HTTP header:
+
+```http
+X-API-Key: <your-api-key>
+```
+
+- Configure your server key using the `API_KEY` (or `CHAT_API_KEY`) environment variable in `.env`. There is no default value; the variable must be set in the environment or `.env`, otherwise the application fails to start with a configuration validation error.
+- The `/health` endpoint is public and does not require authentication.
+- In **Swagger UI** (`/docs`), click the **Authorize** button (padlock icon) and enter your API key to test secured endpoints interactively.
+
+### Authentication Error Responses
+
+When authentication fails, endpoints return `401 Unauthorized`:
+
+**Missing API Key (`401 Unauthorized`):**
+```json
+{
+  "detail": "Missing API Key. Provide it in the 'X-API-Key' header."
+}
+```
+
+**Invalid API Key (`401 Unauthorized`):**
+```json
+{
+  "detail": "Invalid API Key."
+}
+```
+
+---
+
 ## Endpoints
 
 ### 1. Health Check
 
 #### `GET /health`
-Returns the operational status of the service.
+Returns the operational status of the service. This endpoint is public and requires no authentication.
 
 **Response `200 OK`:**
 ```json
@@ -33,6 +67,13 @@ Returns the operational status of the service.
 #### `POST /api/v1/chat`
 Submits a user request to the workflow agent. The agent parses the goal, retrieves SOPs, creates an execution plan, and begins executing steps (or pauses if human approval is needed).
 
+**Headers:**
+
+| Header | Type | Required | Description |
+|---|---|---|---|
+| `X-API-Key` | string | Yes | Secret API Key for authentication. |
+| `Content-Type` | string | Yes | `application/json` |
+
 **Request Body (`ChatRequest`):**
 
 | Field | Type | Required | Description |
@@ -44,6 +85,7 @@ Submits a user request to the workflow agent. The agent parses the goal, retriev
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: workflow-agent-secret-key" \
   -d '{
     "message": "Create a task for user-1 to review the onboarding doc",
     "thread_id": "thread-001"
@@ -58,12 +100,26 @@ curl -X POST http://localhost:8000/api/v1/chat \
 }
 ```
 
+**Response `401 Unauthorized`:**
+```json
+{
+  "detail": "Missing API Key. Provide it in the 'X-API-Key' header."
+}
+```
+
 ---
 
 ### 3. Human-in-the-Loop Approval
 
 #### `POST /api/v1/chat/approve`
 Resumes a workflow thread paused at the `approval_gate`. Use this endpoint to grant approval or submit corrective feedback for replanning.
+
+**Headers:**
+
+| Header | Type | Required | Description |
+|---|---|---|---|
+| `X-API-Key` | string | Yes | Secret API Key for authentication. |
+| `Content-Type` | string | Yes | `application/json` |
 
 **Request Body (`ApprovalRequest`):**
 
@@ -77,6 +133,7 @@ Resumes a workflow thread paused at the `approval_gate`. Use this endpoint to gr
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat/approve \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: workflow-agent-secret-key" \
   -d '{
     "thread_id": "thread-001",
     "approved": true
@@ -87,6 +144,7 @@ curl -X POST http://localhost:8000/api/v1/chat/approve \
 ```bash
 curl -X POST http://localhost:8000/api/v1/chat/approve \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: workflow-agent-secret-key" \
   -d '{
     "thread_id": "thread-001",
     "approved": false,
@@ -99,5 +157,12 @@ curl -X POST http://localhost:8000/api/v1/chat/approve \
 {
   "status": "resumed",
   "thread_id": "thread-001"
+}
+```
+
+**Response `401 Unauthorized`:**
+```json
+{
+  "detail": "Invalid API Key."
 }
 ```
