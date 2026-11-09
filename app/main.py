@@ -12,12 +12,16 @@ if sys.platform == "win32":
 
 from app.agents.checkpointer import close_checkpointer, init_checkpointer
 from app.config.postgres_config import engine
+from app.config.tracing_config import setup_tracing
 from app.routes.core_routes.chat_route import router as chat_router
+
+setup_tracing()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan context."""
+    setup_tracing()
     await init_checkpointer()
     yield
     # Shutdown: clean up SQLAlchemy engine & checkpointer connections

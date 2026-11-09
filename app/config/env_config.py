@@ -31,6 +31,28 @@ class Settings(BaseSettings):
     # Persistence mode
     CHECKPOINTER_TYPE: Literal["memory", "postgres"] = "memory"
 
+    # LangSmith tracing
+    LANGSMITH_TRACING: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("LANGSMITH_TRACING", "LANGCHAIN_TRACING_V2"),
+        description="Enable LangSmith tracing for LangChain / LangGraph",
+    )
+    LANGSMITH_API_KEY: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("LANGSMITH_API_KEY", "LANGCHAIN_API_KEY"),
+        description="API key for LangSmith tracing",
+    )
+    LANGSMITH_PROJECT: str = Field(
+        default="workflow-agent",
+        validation_alias=AliasChoices("LANGSMITH_PROJECT", "LANGCHAIN_PROJECT"),
+        description="Target project name in LangSmith",
+    )
+    LANGSMITH_ENDPOINT: str = Field(
+        default="https://api.smith.langchain.com",
+        validation_alias=AliasChoices("LANGSMITH_ENDPOINT", "LANGCHAIN_ENDPOINT"),
+        description="LangSmith API endpoint",
+    )
+
     # API Security
     API_KEY: SecretStr = Field(
         ...,

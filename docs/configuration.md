@@ -52,9 +52,10 @@ cp .env.example .env
 
 | Variable | Default | Description |
 |---|---|---|
-| `LANGSMITH_TRACING` | `false` | Set to `true` to enable execution tracing in LangSmith. |
-| `LANGSMITH_API_KEY` | `None` | LangSmith API Key (required if tracing is enabled). |
-| `LANGSMITH_PROJECT` | `workflow-sop` | Target project name in LangSmith. |
+| `LANGSMITH_TRACING` | `false` | Set to `true` to enable execution tracing in LangSmith (Alias: `LANGCHAIN_TRACING_V2`). |
+| `LANGSMITH_API_KEY` | `None` | LangSmith API Key (required if tracing is enabled; Alias: `LANGCHAIN_API_KEY`). |
+| `LANGSMITH_PROJECT` | `workflow-agent` | Target project name in LangSmith (Alias: `LANGCHAIN_PROJECT`). |
+| `LANGSMITH_ENDPOINT` | `https://api.smith.langchain.com` | LangSmith API endpoint URL (Alias: `LANGCHAIN_ENDPOINT`). |
 
 ### 6. Application Metadata & CORS
 
