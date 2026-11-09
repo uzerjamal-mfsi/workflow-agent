@@ -16,9 +16,11 @@ from app.schemas.state import WorkflowState
 _compiled_graph: CompiledStateGraph[WorkflowState, Any, Any, Any] | None = None
 
 def route_after_approval(state: WorkflowState) -> str:
-    """Route to execution if approved, otherwise stop."""
+    """Route to execution if approved, replan if feedback provided, otherwise stop."""
     if state.get("approved", False):
         return "execute_next_tool"
+    if state.get("feedback"):
+        return "generate_structured_plan"
     return END
 
 def route_after_verification(state: WorkflowState) -> str:
