@@ -44,6 +44,7 @@ def test_verify_success_next_step():
     result = verify(state)
     assert result == {
         "completed_steps": [step_result],
+        "pending_steps": [plan.steps[1]],
         "current_step_index": 1,
         "retry_count": 0,
         "verification_outcome": "next_step",
@@ -67,6 +68,7 @@ def test_verify_success_completed():
     result = verify(state)
     assert result == {
         "completed_steps": [step_result],
+        "pending_steps": [],
         "current_step_index": 1,
         "retry_count": 0,
         "verification_outcome": "completed",
@@ -89,6 +91,7 @@ def test_verify_success_without_plan():
     result = verify(state)
     assert result == {
         "completed_steps": [step_result],
+        "pending_steps": [],
         "current_step_index": 1,
         "retry_count": 0,
         "verification_outcome": "next_step",
@@ -134,7 +137,11 @@ def test_verify_logical_error():
     }
 
     result = verify(state)
-    assert result == {"verification_outcome": "replan"}
+    assert result == {
+        "failed_steps": [step_result],
+        "pending_steps": [],
+        "verification_outcome": "replan",
+    }
 
 
 def test_verify_transient_error_retry():
@@ -171,7 +178,11 @@ def test_verify_transient_error_escalate_when_max_retries_reached():
     }
 
     result = verify(state)
-    assert result == {"verification_outcome": "escalate"}
+    assert result == {
+        "failed_steps": [step_result],
+        "pending_steps": [],
+        "verification_outcome": "escalate",
+    }
 
 
 def test_verify_fatal_error():
@@ -187,7 +198,11 @@ def test_verify_fatal_error():
     }
 
     result = verify(state)
-    assert result == {"verification_outcome": "escalate"}
+    assert result == {
+        "failed_steps": [step_result],
+        "pending_steps": [],
+        "verification_outcome": "escalate",
+    }
 
 
 def test_verify_unknown_error_type():
@@ -203,5 +218,44 @@ def test_verify_unknown_error_type():
     }
 
     result = verify(state)
-    assert result == {"verification_outcome": "escalate"}
+    assert result == {
+        "failed_steps": [step_result],
+        "pending_steps": [],
+        "verification_outcome": "escalate",
+    }
+
+
+def test_verify_lifecycle_completed_pending_and_failed_steps():
+    plan = _create_sample_plan(num_steps=4)
+    # Step 1 succeeds
+    r1 = StepResult(step_id="step_1", tool="create_task", success=True, output={"id": 1})
+    state1: WorkflowState = {
+        "plan": plan,
+        "current_step_index": 0,
+        "last_step_result": r1,
+        "completed_steps": [],
+        "failed_steps": [],
+        "pending_steps": list(plan.steps),
+    }
+    res1 = verify(state1)
+    assert res1["completed_steps"] == [r1]
+    assert len(res1["pending_steps"]) == 3
+    assert [s.step_id for s in res1["pending_steps"]] == ["step_2", "step_3", "step_4"]
+
+    # Step 2 fails with logical error
+    r2 = StepResult(step_id="step_2", tool="create_task", success=False, error="Bad arg", error_type="logical")
+    state2: WorkflowState = {
+        "plan": plan,
+        "current_step_index": 1,
+        "last_step_result": r2,
+        "completed_steps": res1["completed_steps"],
+        "failed_steps": [],
+        "pending_steps": res1["pending_steps"],
+    }
+    res2 = verify(state2)
+    assert res2["failed_steps"] == [r2]
+    assert len(res2["pending_steps"]) == 2
+    assert [s.step_id for s in res2["pending_steps"]] == ["step_3", "step_4"]
+    assert res2["verification_outcome"] == "replan"
+
 

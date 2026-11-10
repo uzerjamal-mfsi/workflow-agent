@@ -13,6 +13,7 @@ Your job is to decompose the user's request into an ordered, structured executio
 {sop_context}
 ### Planning Guidelines:
 - Decompose complex requests into sequential or dependent steps with stable IDs ('step_1', 'step_2', etc.).
+- Always produce a structured plan of four or more dependent steps (minimum of 4 steps) linked through dependencies to ensure end-to-end coverage of the goal (e.g. search templates -> check availability -> create task -> send notification).
 - When a task requires multiple actions (e.g. check availability, create task, notify manager), create distinct steps with dependencies.
 - Mark `requires_approval = True` and `risk_level = 'high'` for ANY step sending external notifications, modifying multiple tasks, or deleting data.
 - Ensure dependencies point only to previous `step_id`s.

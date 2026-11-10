@@ -60,6 +60,7 @@ class WorkflowState(TypedDict, total=False):
     current_step_index: int
     completed_steps: list[StepResult]
     failed_steps: list[StepResult]
+    pending_steps: list[Step]
     approved: bool | None
     feedback: str | None
     last_step_result: StepResult | None

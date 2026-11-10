@@ -135,9 +135,24 @@ def test_workflow_state_last_step_result_field():
         success=True,
         output={"task_id": "TASK-101"},
     )
+    failed_res = StepResult(
+        step_id="step_2",
+        tool="create_task",
+        success=False,
+        error="Bad param",
+        error_type="logical",
+    )
+    step3 = Step(
+        step_id="step_3",
+        title="Send notify",
+        tool="send_notification",
+        args=SendNotificationArgs(recipient="lead@company.com", message="Hi"),
+    )
     state: WorkflowState = {
         "last_step_result": result,
         "completed_steps": [result],
+        "failed_steps": [failed_res],
+        "pending_steps": [step3],
         "retry_count": 0,
         "verification_outcome": "completed",
     }
@@ -145,5 +160,9 @@ def test_workflow_state_last_step_result_field():
     assert last_step_result is not None
     assert last_step_result.success is True
     assert last_step_result.tool == "create_task"
+    assert len(state["completed_steps"]) == 1
+    assert len(state["failed_steps"]) == 1
+    assert len(state["pending_steps"]) == 1
     assert state["verification_outcome"] == "completed"
+
 

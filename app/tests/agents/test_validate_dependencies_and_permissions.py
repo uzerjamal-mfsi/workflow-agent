@@ -142,20 +142,20 @@ def test_validate_dependencies_and_permission_missing_or_empty_plan():
     assert result["current_step_index"] == 0
     assert result["completed_steps"] == []
     assert result["failed_steps"] == []
+    assert result["pending_steps"] == []
 
 
 def test_validate_dependencies_and_permission_valid_plan():
+    step1 = Step(
+        step_id="step_1",
+        title="Create Task",
+        tool="create_task",
+        args=CreateTaskArgs(title="Task 1", assignee="dev01"),
+    )
     state: WorkflowState = {
         "plan": Plan(
             reasoning="Valid plan",
-            steps=[
-                Step(
-                    step_id="step_1",
-                    title="Create Task",
-                    tool="create_task",
-                    args=CreateTaskArgs(title="Task 1", assignee="dev01"),
-                )
-            ],
+            steps=[step1],
         )
     }
     result = validate_dependencies_and_permission(state)
@@ -166,6 +166,7 @@ def test_validate_dependencies_and_permission_valid_plan():
     assert result["current_step_index"] == 0
     assert result["completed_steps"] == []
     assert result["failed_steps"] == []
+    assert result["pending_steps"] == [step1]
 
 
 def test_validate_dependencies_and_permission_invalid_plan():

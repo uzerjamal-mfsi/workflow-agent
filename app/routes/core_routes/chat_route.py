@@ -10,6 +10,7 @@ from app.agents.checkpointer import get_checkpointer
 from app.agents.workflow_agent import get_workflow_graph
 from app.auth.api_key import verify_api_key
 from app.schemas.core_schemas.chat_schemas import ChatRequest, ChatResponse
+from app.schemas.state import Plan
 
 router = APIRouter(prefix="/api/v1", dependencies=[Security(verify_api_key)])
 
@@ -30,7 +31,7 @@ async def chat_endpoint(
 
     config: RunnableConfig = {"configurable": {"thread_id": request.thread_id}}
 
-    await graph.ainvoke(
+    final_state = await graph.ainvoke(
         {
             "user_request": request.message,
             "thread_id": request.thread_id,
@@ -39,7 +40,30 @@ async def chat_endpoint(
         config=config,
     )
 
-    return ChatResponse(thread_id=request.thread_id, answer="Test")
+    plan: Plan | None = final_state.get("plan")
+
+    if final_state.get("requires_approval") and final_state.get("approved") is None:
+        status = "awaiting_approval"
+        answer = "Workflow paused at approval gate for human review."
+    elif final_state.get("verification_outcome") == "completed":
+        status = "completed"
+        answer = plan.reasoning if plan and plan.reasoning else "Workflow completed successfully."
+    elif final_state.get("verification_outcome") == "escalate":
+        status = "escalated"
+        answer = "Workflow execution escalated due to unrecoverable failure."
+    elif final_state.get("approved") is False:
+        status = "rejected"
+        answer = "Workflow was rejected by human reviewer."
+    else:
+        status = "completed"
+        answer = plan.reasoning if plan and plan.reasoning else "Workflow processed."
+
+    return ChatResponse(
+        thread_id=request.thread_id,
+        answer=answer,
+        plan=plan,
+        status=status,
+    )
 
 
 @router.post("/chat/approve")

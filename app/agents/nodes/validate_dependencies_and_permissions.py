@@ -81,6 +81,7 @@ def validate_dependencies_and_permission(state: WorkflowState) -> dict[str, Any]
             "current_step_index": 0,
             "completed_steps": [],
             "failed_steps": [],
+            "pending_steps": [],
         }
     
     # DAG validation
@@ -98,4 +99,5 @@ def validate_dependencies_and_permission(state: WorkflowState) -> dict[str, Any]
         "current_step_index": 0,
         "completed_steps": [],
         "failed_steps": [],
+        "pending_steps": list(plan.steps),
     }

@@ -16,4 +16,5 @@ def test_planner_prompt_formatting():
     assert "1. Review PR\n2. Notify lead" in messages[0].content
     assert "Coordinate feature launch" in messages[1].content
     assert "Available Tools:" in messages[0].content
+    assert "four or more dependent steps" in messages[0].content
 

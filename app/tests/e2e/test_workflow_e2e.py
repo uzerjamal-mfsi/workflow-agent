@@ -28,6 +28,7 @@ from app.main import app
 from app.schemas.core_schemas.tool_schemas import (
     CheckCalendarArgs,
     CreateTaskArgs,
+    SearchTemplatesArgs,
     SendNotificationArgs,
     UpdateTaskArgs,
 )
@@ -274,44 +275,69 @@ async def test_e2e_human_feedback_triggers_replan(e2e_env):
 
 @pytest.mark.asyncio
 async def test_e2e_multi_step_sequential_workflow(e2e_env):
-    """6. Multi-step plan executes sequentially and records all step results."""
+    """6. Multi-step plan of four dependent steps executes sequentially and records all step results."""
     client, get_state, mock_planner, mock_tool = e2e_env
-    mock_planner.return_value = make_plan(
+    four_step_plan = make_plan(
         [
             make_step(
                 "s1",
-                "check_calendar_availability",
-                CheckCalendarArgs(user_id="dev01", date="2026-11-20"),
+                "search_workflow_templates",
+                SearchTemplatesArgs(query="deployment standard procedure"),
             ),
             make_step(
                 "s2",
+                "check_calendar_availability",
+                CheckCalendarArgs(user_id="dev01", date="2026-11-20"),
+                deps=["s1"],
+            ),
+            make_step(
+                "s3",
                 "create_task",
                 CreateTaskArgs(title="Sprint planning", assignee="dev01"),
-                deps=["s1"],
+                deps=["s2"],
+            ),
+            make_step(
+                "s4",
+                "update_task",
+                UpdateTaskArgs(task_id="TASK-303", fields={"status": "In Progress"}),
+                deps=["s3"],
             ),
         ]
     )
+    mock_planner.return_value = four_step_plan
 
     async def tool_dispatch(step, thread_id, session):
-        return (
-            {"slot": "10:00"}
-            if step.tool == "check_calendar_availability"
-            else {"task_id": "TASK-303"}
-        )
+        match step.tool:
+            case "search_workflow_templates":
+                return ["Template: standard deploy"]
+            case "check_calendar_availability":
+                return {"slot": "10:00"}
+            case "create_task":
+                return {"task_id": "TASK-303"}
+            case "update_task":
+                return {"updated": True}
+            case _:
+                return {}
 
     mock_tool.side_effect = tool_dispatch
 
     res = await client.post(
         "/api/v1/chat",
-        json={"message": "Plan meeting and task", "thread_id": "t6"},
+        json={"message": "Plan meeting and task with template", "thread_id": "t6"},
     )
     assert res.status_code == 200
+    data = res.json()
+    assert data["status"] == "completed"
+    assert data["plan"] is not None
+    assert len(data["plan"]["steps"]) == 4
 
     state = await get_state("t6")
     assert state.next == ()
-    assert state.values["current_step_index"] == 2
+    assert state.values["current_step_index"] == 4
     assert state.values["verification_outcome"] == "completed"
-    assert [s.step_id for s in state.values["completed_steps"]] == ["s1", "s2"]
+    assert [s.step_id for s in state.values["completed_steps"]] == ["s1", "s2", "s3", "s4"]
+    assert state.values["pending_steps"] == []
+    assert state.values["failed_steps"] == []
 
 
 @pytest.mark.asyncio
@@ -371,6 +397,9 @@ async def test_e2e_transient_error_exhausted_retries_escalation(e2e_env):
     assert state.values["retry_count"] == 3
     assert state.values["last_step_result"].success is False
     assert len(state.values.get("completed_steps", [])) == 0
+    assert len(state.values.get("failed_steps", [])) == 1
+    assert state.values["failed_steps"][0].step_id == "s1"
+    assert state.values["failed_steps"][0].error_type == "transient"
 
 
 @pytest.mark.asyncio
