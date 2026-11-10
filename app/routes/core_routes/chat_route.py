@@ -76,19 +76,19 @@ async def chat_endpoint(
     plan: Plan | None = final_state.get("plan")
 
     if final_state.get("requires_approval") and final_state.get("approved") is None:
-        status_val = "awaiting_approval"
+        status = "awaiting_approval"
         answer = "Workflow paused at approval gate for human review."
     elif final_state.get("verification_outcome") == "completed":
-        status_val = "completed"
+        status = "completed"
         answer = plan.reasoning if plan and plan.reasoning else "Workflow completed successfully."
     elif final_state.get("verification_outcome") == "escalate":
-        status_val = "escalated"
+        status = "escalated"
         answer = "Workflow execution escalated due to unrecoverable failure."
     elif final_state.get("approved") is False:
-        status_val = "rejected"
+        status = "rejected"
         answer = "Workflow was rejected by human reviewer."
     else:
-        status_val = "completed"
+        status = "completed"
         answer = plan.reasoning if plan and plan.reasoning else "Workflow processed."
 
     raw_messages = final_state.get("messages", [])
@@ -98,7 +98,7 @@ async def chat_endpoint(
         thread_id=request.thread_id,
         answer=answer,
         plan=plan,
-        status=status_val,
+        status=status,
         messages=chat_history,
     )
 
