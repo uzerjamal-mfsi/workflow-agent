@@ -34,8 +34,8 @@ def split_chunks(
     """Split markdown sections into chunks using the embedding tokenizer."""
     splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
         tokenizer=embedding_provider.tokenizer,
-        chunk_size=500,
-        chunk_overlap=75,
+        chunk_size=300,
+        chunk_overlap=50,
     )
 
     return splitter.split_documents(documents)
