@@ -5,6 +5,11 @@ from pydantic import BaseModel, Field
 from app.schemas.state import Plan, Step, StepResult
 
 
+class ChatMessageItem(BaseModel):
+    role: str = Field(description="Message author role: user or assistant")
+    content: str = Field(description="Message text content")
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, description="Raw Message/Input")
     thread_id: str = Field(
@@ -21,6 +26,9 @@ class ChatResponse(BaseModel):
     )
     status: str = Field(
         default="completed", description="Workflow execution status"
+    )
+    messages: list[ChatMessageItem] = Field(
+        default_factory=list, description="Chronological conversation message history"
     )
 
 
@@ -49,4 +57,7 @@ class WorkflowStatusResponse(BaseModel):
     )
     next_node: str | None = Field(
         default=None, description="Next node waiting for input if interrupted"
+    )
+    messages: list[ChatMessageItem] = Field(
+        default_factory=list, description="Chronological conversation message history"
     )
