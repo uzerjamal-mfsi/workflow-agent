@@ -1,6 +1,6 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Security
+from fastapi import APIRouter, Depends, HTTPException, Security, status
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.types import Command
@@ -9,7 +9,11 @@ from pydantic import BaseModel
 from app.agents.checkpointer import get_checkpointer
 from app.agents.workflow_agent import get_workflow_graph
 from app.auth.api_key import verify_api_key
-from app.schemas.core_schemas.chat_schemas import ChatRequest, ChatResponse
+from app.schemas.core_schemas.chat_schemas import (
+    ChatRequest,
+    ChatResponse,
+    WorkflowStatusResponse,
+)
 from app.schemas.state import Plan
 
 router = APIRouter(prefix="/api/v1", dependencies=[Security(verify_api_key)])
@@ -79,3 +83,53 @@ async def approve_endpoint(
         config=config,
     )
     return {"status": "resumed", "thread_id": request.thread_id}
+
+
+@router.get("/chat/{thread_id}", response_model=WorkflowStatusResponse)
+async def get_chat_state_endpoint(
+    thread_id: str,
+    checkpointer: Annotated[BaseCheckpointSaver[Any], Depends(get_checkpointer)],
+) -> WorkflowStatusResponse:
+    """Retrieve current execution state, plan, and tool results for a thread."""
+    graph = get_workflow_graph(checkpointer)
+    config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
+
+    state_snapshot = await graph.aget_state(config)
+    if not state_snapshot or not state_snapshot.values:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Thread '{thread_id}' not found.",
+        )
+
+    values = state_snapshot.values
+    plan: Plan | None = values.get("plan")
+    next_nodes = state_snapshot.next
+
+    if "approval_gate" in next_nodes:
+        wf_status = "awaiting_approval"
+        answer = "Workflow paused at approval gate for human review."
+    elif values.get("verification_outcome") == "completed":
+        wf_status = "completed"
+        answer = plan.reasoning if plan and plan.reasoning else "Workflow completed successfully."
+    elif values.get("verification_outcome") == "escalate":
+        wf_status = "escalated"
+        answer = "Workflow execution escalated due to unrecoverable failure."
+    elif values.get("approved") is False:
+        wf_status = "rejected"
+        answer = "Workflow was rejected by human reviewer."
+    else:
+        wf_status = "completed" if not next_nodes else "running"
+        answer = plan.reasoning if plan and plan.reasoning else "Workflow processed."
+
+    return WorkflowStatusResponse(
+        thread_id=thread_id,
+        status=wf_status,
+        answer=answer,
+        plan=plan,
+        current_step_index=values.get("current_step_index", 0),
+        completed_steps=values.get("completed_steps", []),
+        pending_steps=values.get("pending_steps", []),
+        failed_steps=values.get("failed_steps", []),
+        requires_approval="approval_gate" in next_nodes,
+        next_node=next_nodes[0] if next_nodes else None,
+    )

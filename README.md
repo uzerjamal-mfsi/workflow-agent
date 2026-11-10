@@ -193,6 +193,16 @@ curl -X POST http://localhost:8000/api/v1/chat/approve \
   }'
 ```
 
+### 4. Query Workflow State & Results
+
+Inspect the live execution state, completed step outputs, pending steps, or check if the workflow paused again:
+
+```bash
+curl http://localhost:8000/api/v1/chat/session-101 \
+  -H "X-API-Key: secret-key"
+```
+
+
 ---
 
 ## Running Tests
