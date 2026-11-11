@@ -12,13 +12,24 @@ from app.config.env_config import get_settings
 _memory_saver: MemorySaver | None = None
 _postgres_saver: AsyncPostgresSaver | None = None
 _postgres_cm: AsyncContextManager[AsyncPostgresSaver] | None = None
-_lock: asyncio.Lock = asyncio.Lock()
+_lock: asyncio.Lock | None = None
+_lock_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_lock() -> asyncio.Lock:
+    """Return an asyncio.Lock bound to the current running event loop."""
+    global _lock, _lock_loop
+    loop = asyncio.get_running_loop()
+    if _lock is None or _lock_loop is not loop:
+        _lock = asyncio.Lock()
+        _lock_loop = loop
+    return _lock
 
 
 async def init_checkpointer() -> BaseCheckpointSaver[Any]:
     """Initialize the active checkpointer during startup with concurrency protection."""
     global _memory_saver, _postgres_saver, _postgres_cm
-    async with _lock:
+    async with _get_lock():
         settings = get_settings()
 
         if settings.CHECKPOINTER_TYPE == "postgres":
@@ -45,7 +56,7 @@ async def get_checkpointer() -> BaseCheckpointSaver[Any]:
 async def close_checkpointer() -> None:
     """Cleanly close the Postgres checkpointer if open."""
     global _postgres_cm, _postgres_saver, _memory_saver
-    async with _lock:
+    async with _get_lock():
         if _postgres_cm is not None:
             _ = await _postgres_cm.__aexit__(None, None, None)
             _postgres_cm = None
