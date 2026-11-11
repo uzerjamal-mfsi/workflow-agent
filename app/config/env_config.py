@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     # LLM
     OPENROUTER_API_KEY: SecretStr
     MODEL_NAME: str
+    LLM_TIMEOUT: int = 60
+    LLM_MAX_RETRIES: int = 3
 
     @property
     def raw_postgres_url(self) -> str:
