@@ -1,8 +1,8 @@
-from typing import Any
 
 from langgraph.types import interrupt
 
 from app.schemas.state import ApprovalDecision, Plan, WorkflowState
+
 
 def approval_gate(state: WorkflowState):
     """Human-in-the-Loop approval gate node."""

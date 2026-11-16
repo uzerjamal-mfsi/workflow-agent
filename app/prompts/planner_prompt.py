@@ -1,6 +1,5 @@
 from langchain_core.prompts import ChatPromptTemplate
 
-
 PLANNER_SYSTEM_PROMPT = """You are an expert platform workflow planner.
 Your job is to decompose the user's request into an ordered, structured execution plan using ONLY the available tools.
 ### Available Tools:

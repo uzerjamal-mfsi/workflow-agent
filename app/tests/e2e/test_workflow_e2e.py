@@ -32,7 +32,7 @@ from app.schemas.core_schemas.tool_schemas import (
     SendNotificationArgs,
     UpdateTaskArgs,
 )
-from app.schemas.state import Plan, Step
+from app.schemas.state import IntentClassification, Plan, Step
 
 
 def make_step(
@@ -68,11 +68,18 @@ async def e2e_env(
         patch(
             "app.agents.nodes.retrieve_sops.search_sops", return_value=["Standard SOP"]
         ),
+        patch("app.agents.nodes.parse_goal.get_llm") as mock_parse_llm,
         patch("app.agents.nodes.generate_structured_plan.get_llm") as mock_get_llm,
         patch(
             "app.agents.nodes.execute_new_tool._run_tool", new_callable=AsyncMock
         ) as mock_run_tool,
     ):
+        mock_parse_struct = MagicMock()
+        mock_parse_struct.invoke.return_value = IntentClassification(is_supported=True)
+        mock_parse_llm.return_value.with_structured_output.return_value = (
+            mock_parse_struct
+        )
+
         mock_structured = MagicMock()
         mock_get_llm.return_value.with_structured_output.return_value = mock_structured
 
@@ -172,9 +179,7 @@ async def test_e2e_sensitive_notification_approved(e2e_env):
     mock_tool.return_value = {"status": "sent"}
 
     # Request pauses at approval gate
-    await client.post(
-        "/api/v1/chat", json={"message": "Send alert", "thread_id": "t3"}
-    )
+    await client.post("/api/v1/chat", json={"message": "Send alert", "thread_id": "t3"})
     state = await get_state("t3")
     assert state.next == ("approval_gate",)
     mock_tool.assert_not_called()
@@ -204,9 +209,7 @@ async def test_e2e_sensitive_notification_rejected(e2e_env):
         ]
     )
 
-    await client.post(
-        "/api/v1/chat", json={"message": "Send alert", "thread_id": "t4"}
-    )
+    await client.post("/api/v1/chat", json={"message": "Send alert", "thread_id": "t4"})
     assert (await get_state("t4")).next == ("approval_gate",)
 
     # User rejects without feedback -> workflow ends
@@ -244,8 +247,8 @@ async def test_e2e_human_feedback_triggers_replan(e2e_env):
             )
         ]
     )
-    mock_planner.side_effect = (
-        lambda msgs: plan_revised
+    mock_planner.side_effect = lambda msgs: (
+        plan_revised
         if any("[USER REPLAN FEEDBACK]" in m.content for m in msgs)
         else plan_initial
     )
@@ -335,7 +338,12 @@ async def test_e2e_multi_step_sequential_workflow(e2e_env):
     assert state.next == ()
     assert state.values["current_step_index"] == 4
     assert state.values["verification_outcome"] == "completed"
-    assert [s.step_id for s in state.values["completed_steps"]] == ["s1", "s2", "s3", "s4"]
+    assert [s.step_id for s in state.values["completed_steps"]] == [
+        "s1",
+        "s2",
+        "s3",
+        "s4",
+    ]
     assert state.values["pending_steps"] == []
     assert state.values["failed_steps"] == []
 
@@ -425,8 +433,8 @@ async def test_e2e_logical_tool_error_triggers_replan(e2e_env):
         ]
     )
 
-    mock_planner.side_effect = (
-        lambda msgs: good_plan
+    mock_planner.side_effect = lambda msgs: (
+        good_plan
         if any("[PREVIOUS FAILURE TO REVISE]" in m.content for m in msgs)
         else bad_plan
     )
@@ -447,9 +455,7 @@ async def test_e2e_logical_tool_error_triggers_replan(e2e_env):
     assert state.next == ()
     assert state.values["verification_outcome"] == "completed"
     assert state.values["completed_steps"][0].step_id == "s2"
-    assert state.values["completed_steps"][0].output == {
-        "task_id": "TASK-RECOVERED"
-    }
+    assert state.values["completed_steps"][0].output == {"task_id": "TASK-RECOVERED"}
 
 
 @pytest.mark.asyncio
@@ -488,3 +494,45 @@ async def test_e2e_bulk_update_security_policy_enforcement(e2e_env):
     assert state.next == ()
     assert state.values["verification_outcome"] == "completed"
     assert state.values["completed_steps"][0].output == {"updated": True}
+
+
+@pytest.mark.asyncio
+async def test_e2e_unsupported_goal_halts_at_end_with_response_message(e2e_env):
+    """11. Unsupported goal immediately terminates at END with rejection response message without executing tools."""
+    client, get_state, mock_planner, mock_tool = e2e_env
+
+    with patch("app.agents.nodes.parse_goal.get_llm") as mock_parse_llm:
+        mock_parse_struct = MagicMock()
+        mock_parse_struct.invoke.return_value = IntentClassification(
+            is_supported=False,
+            rejection_reason="I can only assist with platform workflows such as Jira tasks, calendar checks, and notifications.",
+        )
+        mock_parse_llm.return_value.with_structured_output.return_value = (
+            mock_parse_struct
+        )
+
+        res = await client.post(
+            "/api/v1/chat",
+            json={
+                "message": "Can you bake me a chocolate cake?",
+                "thread_id": "t_cake",
+            },
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "rejected"
+        assert "only assist with platform workflows" in data["answer"]
+        assert data["plan"] is None
+        assert len(data["messages"]) >= 2
+        assert data["messages"][-1]["role"] == "assistant"
+        assert "only assist with platform workflows" in data["messages"][-1]["content"]
+
+        state = await get_state("t_cake")
+        assert state.next == ()
+        assert state.values["is_supported"] is False
+        assert state.values["rejection_reason"] == (
+            "I can only assist with platform workflows such as Jira tasks, calendar checks, and notifications."
+        )
+        assert len(state.values.get("completed_steps", [])) == 0
+        mock_tool.assert_not_called()
+        mock_planner.assert_not_called()

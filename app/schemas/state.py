@@ -1,9 +1,15 @@
 from typing import Annotated, Any, Literal, TypedDict
 
+from app.schemas.core_schemas.tool_schemas import (
+    CheckCalendarArgs,
+    CreateTaskArgs,
+    SearchTemplatesArgs,
+    SendNotificationArgs,
+    UpdateTaskArgs,
+)
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
-from app.schemas.core_schemas.tool_schemas import CheckCalendarArgs, CreateTaskArgs, SearchTemplatesArgs, SendNotificationArgs, UpdateTaskArgs
 
 class StepResult(BaseModel):
     step_id: str
@@ -13,13 +19,12 @@ class StepResult(BaseModel):
     error: str | None = None
     error_type: Literal["transient", "logical", "fatal"] | None = None
 
+
 class Step(BaseModel):
     step_id: str = Field(
         description="Unique identifier for the step, e.g. 'step_1', 'step_2'"
     )
-    title: str = Field(
-        description="Short description of what this step accomplishes"
-    )
+    title: str = Field(description="Short description of what this step accomplishes")
     tool: Literal[
         "search_workflow_templates",
         "create_task",
@@ -27,7 +32,13 @@ class Step(BaseModel):
         "send_notification",
         "check_calendar_availability",
     ] = Field(description="The exact tool to execute for this step")
-    args: CreateTaskArgs | SendNotificationArgs | CheckCalendarArgs | UpdateTaskArgs | SearchTemplatesArgs
+    args: (
+        CreateTaskArgs
+        | SendNotificationArgs
+        | CheckCalendarArgs
+        | UpdateTaskArgs
+        | SearchTemplatesArgs
+    )
     dependencies: list[str] = Field(
         default_factory=list,
         description="List of step_ids that must finish before this step can run",
@@ -41,11 +52,23 @@ class Step(BaseModel):
         description="Expected postcondition or result of this step",
     )
 
+
 class Plan(BaseModel):
-    reasoning: str = Field(description="Brief summary explaining why this plan was formed based on SOPs")
-    steps: list[Step] = Field(
-        description="Ordered list of steps to achieve the goal"
+    reasoning: str = Field(
+        description="Brief summary explaining why this plan was formed based on SOPs"
     )
+    steps: list[Step] = Field(description="Ordered list of steps to achieve the goal")
+
+
+class IntentClassification(BaseModel):
+    is_supported: bool = Field(
+        description="Whether the user request is a supported workflow task that can be executed using available platform tools and SOPs."
+    )
+    rejection_reason: str | None = Field(
+        default=None,
+        description="If is_supported is False, a concise explanation stating why the request cannot be handled and what capabilities are supported. If is_supported is True, this should be None.",
+    )
+
 
 class WorkflowState(TypedDict, total=False):
     messages: Annotated[list[Any], add_messages]
@@ -65,7 +88,12 @@ class WorkflowState(TypedDict, total=False):
     feedback: str | None
     last_step_result: StepResult | None
     retry_count: int
-    verification_outcome: Literal["next_step", "retry", "replan", "completed", "escalate"] | None
+    verification_outcome: (
+        Literal["next_step", "retry", "replan", "completed", "escalate"] | None
+    )
+    is_supported: bool | None
+    rejection_reason: str | None
+
 
 class ApprovalDecision(BaseModel):
     approved: bool

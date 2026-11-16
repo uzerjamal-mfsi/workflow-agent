@@ -50,7 +50,9 @@ async def test_chat_endpoint(memory_checkpointer, auth_headers):
             mock_get_graph.return_value = mock_graph
 
             transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v1/chat",
                     headers=auth_headers,
@@ -65,7 +67,9 @@ async def test_chat_endpoint(memory_checkpointer, auth_headers):
                 assert data["status"] == "completed"
                 # Verify plan is returned in API response
                 assert data["plan"] is not None
-                assert data["plan"]["reasoning"] == "Executing 4-step deployment workflow"
+                assert (
+                    data["plan"]["reasoning"] == "Executing 4-step deployment workflow"
+                )
                 assert len(data["plan"]["steps"]) == 1
                 assert data["plan"]["steps"][0]["step_id"] == "step_1"
     finally:
@@ -103,7 +107,9 @@ async def test_chat_endpoint_awaiting_approval(memory_checkpointer, auth_headers
             mock_get_graph.return_value = mock_graph
 
             transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/api/v1/chat",
                     headers=auth_headers,
@@ -116,7 +122,6 @@ async def test_chat_endpoint_awaiting_approval(memory_checkpointer, auth_headers
                 assert "approval gate" in data["answer"].lower()
     finally:
         app.dependency_overrides.clear()
-
 
 
 @pytest.mark.asyncio
@@ -311,13 +316,17 @@ async def test_get_chat_state_endpoint_completed(memory_checkpointer, auth_heade
     mock_snapshot.next = ()
 
     try:
-        with patch("app.routes.core_routes.chat_route.get_workflow_graph") as mock_get_graph:
+        with patch(
+            "app.routes.core_routes.chat_route.get_workflow_graph"
+        ) as mock_get_graph:
             mock_graph = MagicMock()
             mock_graph.aget_state = AsyncMock(return_value=mock_snapshot)
             mock_get_graph.return_value = mock_graph
 
             transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
                 response = await client.get(
                     "/api/v1/chat/thread-123",
                     headers=auth_headers,
@@ -333,7 +342,9 @@ async def test_get_chat_state_endpoint_completed(memory_checkpointer, auth_heade
 
 
 @pytest.mark.asyncio
-async def test_get_chat_state_endpoint_awaiting_approval(memory_checkpointer, auth_headers):
+async def test_get_chat_state_endpoint_awaiting_approval(
+    memory_checkpointer, auth_headers
+):
     """Test GET /api/v1/chat/{thread_id} returns awaiting_approval when paused."""
     app.dependency_overrides[get_checkpointer] = lambda: memory_checkpointer
     mock_snapshot = MagicMock()
@@ -348,13 +359,17 @@ async def test_get_chat_state_endpoint_awaiting_approval(memory_checkpointer, au
     mock_snapshot.next = ("approval_gate",)
 
     try:
-        with patch("app.routes.core_routes.chat_route.get_workflow_graph") as mock_get_graph:
+        with patch(
+            "app.routes.core_routes.chat_route.get_workflow_graph"
+        ) as mock_get_graph:
             mock_graph = MagicMock()
             mock_graph.aget_state = AsyncMock(return_value=mock_snapshot)
             mock_get_graph.return_value = mock_graph
 
             transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
                 response = await client.get(
                     "/api/v1/chat/thread-pause",
                     headers=auth_headers,
@@ -376,18 +391,107 @@ async def test_get_chat_state_endpoint_not_found(memory_checkpointer, auth_heade
     mock_snapshot.values = {}
 
     try:
-        with patch("app.routes.core_routes.chat_route.get_workflow_graph") as mock_get_graph:
+        with patch(
+            "app.routes.core_routes.chat_route.get_workflow_graph"
+        ) as mock_get_graph:
             mock_graph = MagicMock()
             mock_graph.aget_state = AsyncMock(return_value=mock_snapshot)
             mock_get_graph.return_value = mock_graph
 
             transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as client:
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
                 response = await client.get(
                     "/api/v1/chat/thread-nonexistent",
                     headers=auth_headers,
                 )
                 assert response.status_code == 404
-                assert response.json()["detail"] == "Thread 'thread-nonexistent' not found."
+                assert (
+                    response.json()["detail"]
+                    == "Thread 'thread-nonexistent' not found."
+                )
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_chat_endpoint_unsupported_goal(memory_checkpointer, auth_headers):
+    """Test chat request returns rejected status and rejection answer when goal is unsupported."""
+    app.dependency_overrides[get_checkpointer] = lambda: memory_checkpointer
+    mock_final_state = {
+        "thread_id": "test-thread-unsupported",
+        "is_supported": False,
+        "rejection_reason": "Baking cakes is not supported.",
+        "plan": None,
+    }
+    try:
+        with patch(
+            "app.routes.core_routes.chat_route.get_workflow_graph"
+        ) as mock_get_graph:
+            mock_graph = MagicMock()
+            mock_graph.ainvoke = AsyncMock(return_value=mock_final_state)
+            mock_get_graph.return_value = mock_graph
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
+                response = await client.post(
+                    "/api/v1/chat",
+                    headers=auth_headers,
+                    json={
+                        "message": "Can you bake a cake?",
+                        "thread_id": "test-thread-unsupported",
+                    },
+                )
+                assert response.status_code == 200
+                data = response.json()
+                assert data["thread_id"] == "test-thread-unsupported"
+                assert data["status"] == "rejected"
+                assert data["answer"] == "Baking cakes is not supported."
+                assert data["plan"] is None
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_get_chat_state_endpoint_unsupported(memory_checkpointer, auth_headers):
+    """Test GET /api/v1/chat/{thread_id} returns rejected when state is unsupported."""
+    app.dependency_overrides[get_checkpointer] = lambda: memory_checkpointer
+    mock_snapshot = MagicMock()
+    mock_snapshot.values = {
+        "thread_id": "thread-unsupported",
+        "is_supported": False,
+        "rejection_reason": "Casual chat is not supported.",
+        "plan": None,
+        "current_step_index": 0,
+        "completed_steps": [],
+        "pending_steps": [],
+        "failed_steps": [],
+    }
+    mock_snapshot.next = ()
+
+    try:
+        with patch(
+            "app.routes.core_routes.chat_route.get_workflow_graph"
+        ) as mock_get_graph:
+            mock_graph = MagicMock()
+            mock_graph.aget_state = AsyncMock(return_value=mock_snapshot)
+            mock_get_graph.return_value = mock_graph
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(
+                transport=transport, base_url="http://test"
+            ) as client:
+                response = await client.get(
+                    "/api/v1/chat/thread-unsupported",
+                    headers=auth_headers,
+                )
+                assert response.status_code == 200
+                data = response.json()
+                assert data["status"] == "rejected"
+                assert data["answer"] == "Casual chat is not supported."
+                assert data["plan"] is None
     finally:
         app.dependency_overrides.clear()

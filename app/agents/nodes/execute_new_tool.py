@@ -10,6 +10,7 @@ from app.services.core_services.embedding_service import get_embedding_provider
 from app.services.core_services.sop_service import search_sops
 from app.services.mock_services import CalendarService, NotificationService, TaskService
 
+
 async def _run_tool(step: Step, thread_id: str, session: AsyncSession) -> Any:
     """Dispatches the step to the appropriate service."""
     idempotency_key = f"{thread_id}:{step.step_id}"

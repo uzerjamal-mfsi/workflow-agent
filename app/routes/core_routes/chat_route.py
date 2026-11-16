@@ -37,9 +37,8 @@ def extract_chat_history(
             if hasattr(m, "content")
             else (m.get("content") if isinstance(m, dict) else str(m))
         )
-        msg_type = (
-            getattr(m, "type", None)
-            or (m.get("type") if isinstance(m, dict) else None)
+        msg_type = getattr(m, "type", None) or (
+            m.get("type") if isinstance(m, dict) else None
         )
         if msg_type in ("ai", "assistant"):
             role = "assistant"
@@ -78,9 +77,19 @@ async def chat_endpoint(
     if final_state.get("requires_approval") and final_state.get("approved") is None:
         status = "awaiting_approval"
         answer = "Workflow paused at approval gate for human review."
+    elif final_state.get("is_supported") is False:
+        status = "rejected"
+        answer = (
+            final_state.get("rejection_reason")
+            or "This request is not supported. I can only assist with platform workflow tasks."
+        )
     elif final_state.get("verification_outcome") == "completed":
         status = "completed"
-        answer = plan.reasoning if plan and plan.reasoning else "Workflow completed successfully."
+        answer = (
+            plan.reasoning
+            if plan and plan.reasoning
+            else "Workflow completed successfully."
+        )
     elif final_state.get("verification_outcome") == "escalate":
         status = "escalated"
         answer = "Workflow execution escalated due to unrecoverable failure."
@@ -141,9 +150,19 @@ async def get_chat_state_endpoint(
     if "approval_gate" in next_nodes:
         wf_status = "awaiting_approval"
         answer = "Workflow paused at approval gate for human review."
+    elif values.get("is_supported") is False:
+        wf_status = "rejected"
+        answer = (
+            values.get("rejection_reason")
+            or "This request is not supported. I can only assist with platform workflow tasks."
+        )
     elif values.get("verification_outcome") == "completed":
         wf_status = "completed"
-        answer = plan.reasoning if plan and plan.reasoning else "Workflow completed successfully."
+        answer = (
+            plan.reasoning
+            if plan and plan.reasoning
+            else "Workflow completed successfully."
+        )
     elif values.get("verification_outcome") == "escalate":
         wf_status = "escalated"
         answer = "Workflow execution escalated due to unrecoverable failure."
